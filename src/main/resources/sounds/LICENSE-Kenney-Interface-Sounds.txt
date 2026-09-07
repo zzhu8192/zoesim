@@ -1,0 +1,10 @@
+Interface Sounds (1.0)
+
+Created/distributed by Kenney (www.kenney.nl)
+Creation date: 11-02-2020
+
+License: Creative Commons Zero (CC0)
+http://creativecommons.org/publicdomain/zero/1.0/
+
+The source package is free to use in personal, educational and commercial projects.
+Source: https://github.com/Calinou/kenney-interface-sounds

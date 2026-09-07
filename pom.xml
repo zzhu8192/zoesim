@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>zoesim</groupId>
+    <artifactId>rps-arena</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+    <name>RPS Arena :: Java / Scala / libGDX</name>
+
+    <description>
+        A real-time Rock, Paper, Scissors arena simulation built with Java on libGDX.
+        Scala 2.13 is retained as an optional source language for future simulation rules and tests.
+    </description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <java-version>17</java-version>
+
+        <!-- scala related -->
+        <scala-maven-plugin-version>4.9.2</scala-maven-plugin-version>
+        <scala-major-version>2</scala-major-version>
+        <scala-minor-version>13</scala-minor-version>
+        <scala-patch-version>17</scala-patch-version>
+
+        <!--
+          libGDX. The desktop natives (gdx-platform natives-desktop) cover Windows/Linux/macOS on
+          x86-64 and Linux/macOS ARM64, but not Windows ARM64 as of 1.14.2: on that platform run
+          with an x86-64 JDK. gdx-lwjgl3-angle is the optional OpenGL ES over Direct3D/Metal
+          renderer, selected at runtime by Main when no hardware GL driver is usable.
+        -->
+        <gdx-version>1.13.5</gdx-version>
+
+        <!-- test related -->
+        <scala-test-version>3.2.19</scala-test-version>
+        <scala-test-plus-version>3.2.2.0</scala-test-plus-version>
+        <junit-version>4.13.2</junit-version>
+
+        <!-- maven related -->
+        <maven-compiler-plugin-version>3.14.0</maven-compiler-plugin-version>
+        <maven-surefire-plugin-version>2.22.2</maven-surefire-plugin-version>
+        <maven-shade-plugin-version>3.6.0</maven-shade-plugin-version>
+        <exec-maven-plugin-version>3.4.1</exec-maven-plugin-version>
+
+        <main-class>zoesim.DesktopLauncher</main-class>
+
+        <!-- Tests never open a window; keep AWT/LWJGL from trying. -->
+        <test.jvm.args>-Djava.awt.headless=true -Xmx1g</test.jvm.args>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.badlogicgames.gdx</groupId>
+                <artifactId>gdx</artifactId>
+                <version>${gdx-version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.badlogicgames.gdx</groupId>
+                <artifactId>gdx-backend-lwjgl3</artifactId>
+                <version>${gdx-version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.badlogicgames.gdx</groupId>
+                <artifactId>gdx-platform</artifactId>
+                <version>${gdx-version}</version>
+                <classifier>natives-desktop</classifier>
+            </dependency>
+            <dependency>
+                <groupId>com.badlogicgames.gdx</groupId>
+                <artifactId>gdx-lwjgl3-angle</artifactId>
+                <version>${gdx-version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Scala: compile scope (unlike a Spark job, nothing provides it at runtime) -->
+        <dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-library</artifactId>
+            <version>${scala-major-version}.${scala-minor-version}.${scala-patch-version}</version>
+        </dependency>
+
+        <!-- libGDX core + desktop backend + natives -->
+        <dependency>
+            <groupId>com.badlogicgames.gdx</groupId>
+            <artifactId>gdx</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.badlogicgames.gdx</groupId>
+            <artifactId>gdx-backend-lwjgl3</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.badlogicgames.gdx</groupId>
+            <artifactId>gdx-platform</artifactId>
+            <classifier>natives-desktop</classifier>
+        </dependency>
+        <dependency>
+            <groupId>com.badlogicgames.gdx</groupId>
+            <artifactId>gdx-lwjgl3-angle</artifactId>
+        </dependency>
+
+        <!-- Test: ScalaTest suites annotated @RunWith(classOf[JUnitRunner]) so surefire runs them -->
+        <dependency>
+            <groupId>org.scalatest</groupId>
+            <artifactId>scalatest_${scala-major-version}.${scala-minor-version}</artifactId>
+            <version>${scala-test-version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.scalatestplus</groupId>
+            <artifactId>junit-4-12_${scala-major-version}.${scala-minor-version}</artifactId>
+            <version>${scala-test-plus-version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>${junit-version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!--
+              Hybrid compile order: scalac is bound to process-resources / process-test-resources,
+              the phases just before compile / test-compile, so it always runs before javac. It
+              compiles src/main/scala and parses src/main/java for signatures, so Scala and Java may
+              reference each other; maven-compiler-plugin then emits the Java class files.
+            -->
+            <plugin>
+                <groupId>net.alchim31.maven</groupId>
+                <artifactId>scala-maven-plugin</artifactId>
+                <version>${scala-maven-plugin-version}</version>
+                <executions>
+                    <execution>
+                        <id>scala-compile</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>compile</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>scala-test-compile</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>testCompile</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <recompileMode>incremental</recompileMode>
+                    <scalaVersion>${scala-major-version}.${scala-minor-version}.${scala-patch-version}</scalaVersion>
+                    <scalaCompatVersion>${scala-major-version}.${scala-minor-version}</scalaCompatVersion>
+                    <args>
+                        <arg>-deprecation</arg>
+                        <arg>-feature</arg>
+                        <arg>-release</arg>
+                        <arg>${java-version}</arg>
+                    </args>
+                    <fork>true</fork>
+                    <jvmArgs>
+                        <jvmArg>-Xms512m</jvmArg>
+                        <jvmArg>-Xmx2048m</jvmArg>
+                        <jvmArg>-Xss16m</jvmArg>
+                    </jvmArgs>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin-version}</version>
+                <configuration>
+                    <release>${java-version}</release>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin-version}</version>
+                <configuration>
+                    <argLine>${test.jvm.args}</argLine>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <!-- Surefire rewrites a .java include to .class, which is how the Scala
+                         suites (ScalaTest via @RunWith(JUnitRunner)) get picked up. -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+
+            <!-- mvn exec:java runs the game from the project root (assets/ is resolved relatively) -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>${exec-maven-plugin-version}</version>
+                <configuration>
+                    <mainClass>${main-class}</mainClass>
+                    <classpathScope>runtime</classpathScope>
+                </configuration>
+            </plugin>
+
+            <!--
+              Shade produces the runnable assembly (target/rps-arena.jar) as an attached classifier so
+              the thin jar stays the main artifact. Signature files are dropped because the merged
+              jar no longer matches them; ServicesResourceTransformer merges META-INF/services.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>${maven-shade-plugin-version}</version>
+                <executions>
+                    <execution>
+                        <id>shade-jar-with-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <shadedArtifactAttached>true</shadedArtifactAttached>
+                    <shadedClassifierName>jar-with-dependencies</shadedClassifierName>
+                    <finalName>rps-arena</finalName>
+                    <createDependencyReducedPom>false</createDependencyReducedPom>
+                    <transformers>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                            <mainClass>${main-class}</mainClass>
+                        </transformer>
+                        <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                    </transformers>
+                    <filters>
+                        <filter>
+                            <artifact>*:*</artifact>
+                            <excludes>
+                                <exclude>META-INF/*.SF</exclude>
+                                <exclude>META-INF/*.DSA</exclude>
+                                <exclude>META-INF/*.RSA</exclude>
+                                <exclude>module-info.class</exclude>
+                                <exclude>META-INF/versions/*/module-info.class</exclude>
+                            </excludes>
+                        </filter>
+                    </filters>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

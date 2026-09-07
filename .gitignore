@@ -1,0 +1,26 @@
+# Java / Maven build products
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# IDEs and editor state
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+.vscode/
+
+# OS and local application files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local temporary output
+tmp/
+out/
+*.tmp
+*.bak
