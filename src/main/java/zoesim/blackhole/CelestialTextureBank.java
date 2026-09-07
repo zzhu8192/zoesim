@@ -18,6 +18,7 @@ public final class CelestialTextureBank {
     private final TextureRegion[][] frames;
     private final Texture jetCloudTexture;
     private final Texture accretionCloudTexture;
+    private final Texture foggyBulbTexture;
 
     public CelestialTextureBank() {
         Pixmap atlasMap = new Pixmap(FRAME_COUNT * FRAME_SIZE, BODY_TYPE_COUNT * FRAME_SIZE, Pixmap.Format.RGBA8888);
@@ -46,6 +47,7 @@ public final class CelestialTextureBank {
 
         jetCloudTexture = createJetCloudTexture();
         accretionCloudTexture = createAccretionCloudTexture();
+        foggyBulbTexture = createFoggyBulbTexture();
     }
 
     public TextureRegion getFrame(int bodyType, float rotation) {
@@ -62,6 +64,10 @@ public final class CelestialTextureBank {
 
     public Texture getAccretionCloudTexture() {
         return accretionCloudTexture;
+    }
+
+    public Texture getFoggyBulbTexture() {
+        return foggyBulbTexture;
     }
 
     private static void renderBodyFrame(Pixmap map, int type, int originX, int originY, float rotAngle) {
@@ -372,9 +378,62 @@ public final class CelestialTextureBank {
         return texture;
     }
 
+    private static Texture createFoggyBulbTexture() {
+        final int size = 512;
+        final float center = size * 0.5f;
+        final float maxRadius = size * 0.5f - 2f;
+        Pixmap map = new Pixmap(size, size, Pixmap.Format.RGBA8888);
+        map.setBlending(Pixmap.Blending.None);
+        map.setColor(0f, 0f, 0f, 0f);
+        map.fill();
+
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                float dx = x - center + 0.5f;
+                float dy = y - center + 0.5f;
+                float dist = (float)Math.sqrt(dx * dx + dy * dy);
+                if (dist >= maxRadius) continue;
+
+                float u = dist / maxRadius; // [0, 1] normalized radius
+                float angle = MathUtils.atan2(dy, dx);
+
+                // Multi-frequency organic fog turbulence so it feels like living diffused cosmic gas
+                float turb = MathUtils.sin(angle * 3f + dist * 0.045f) * 0.035f
+                        + MathUtils.sin(angle * 7f - dist * 0.075f) * 0.020f;
+                float uTurb = MathUtils.clamp(u + turb, 0f, 1f);
+
+                // Layer 1: Inner foggy bulb (visible at ~2x-2.5x black hole radius, corresponding to uTurb < 0.40)
+                // Frosted glowing incandescent aura
+                float innerBulb = (float)Math.exp(-uTurb * uTurb / (2f * 0.17f * 0.17f)) * 0.55f;
+
+                // Layer 2: Outer diffuse foggy shroud extending to the full width of the accretion disc
+                // Gradients out to a much softer layer of lower brightness without hard edges
+                float outerShroud = (float)Math.exp(-uTurb * uTurb / (2f * 0.48f * 0.48f)) * (1f - uTurb) * 0.22f;
+
+                float totalAlpha = MathUtils.clamp(innerBulb + outerShroud, 0f, 1f);
+                if (totalAlpha < 0.002f) continue;
+
+                // Color blend: luminous warm champagne/white in inner bulb, shifting to warm smoky bronze in outer shroud
+                float innerWeight = innerBulb / Math.max(0.001f, totalAlpha);
+                float red = MathUtils.lerp(0.92f, 1.0f, innerWeight);
+                float green = MathUtils.lerp(0.68f, 0.96f, innerWeight);
+                float blue = MathUtils.lerp(0.42f, 0.88f, innerWeight);
+
+                map.setColor(red, green, blue, totalAlpha);
+                map.drawPixel(x, y);
+            }
+        }
+
+        Texture texture = new Texture(map);
+        map.dispose();
+        texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        return texture;
+    }
+
     public void dispose() {
         atlasTexture.dispose();
         jetCloudTexture.dispose();
         accretionCloudTexture.dispose();
+        foggyBulbTexture.dispose();
     }
 }

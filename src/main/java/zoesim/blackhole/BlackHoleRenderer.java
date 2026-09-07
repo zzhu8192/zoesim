@@ -88,9 +88,10 @@ public final class BlackHoleRenderer {
         }
         shapes.end();
 
-        // 2. Sprites: Back accretion clouds, 3D rotating bodies, black hole sprite, front clouds, and jetstream
+        // 2. Sprites: Foggy bulb luminance, back accretion clouds, 3D rotating bodies, black hole sprite, front clouds, and jetstream
         batch.begin();
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
+        drawFoggyBulbLuminance(batch, world, horizon);
         drawAccretionClouds(batch, world, horizon, false, simTime);
         batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
@@ -487,6 +488,20 @@ public final class BlackHoleRenderer {
         batch.setColor(Color.WHITE);
     }
 
+    private void drawFoggyBulbLuminance(SpriteBatch batch, BlackHoleWorld world, float horizon) {
+        Texture fogTex = textureBank.getFoggyBulbTexture();
+        float arenaX = world.getArenaX();
+        float arenaY = world.getArenaY();
+        // Extends almost to the full width of the accretion disc (~6.4x horizon radius in both directions = 12.8x width)
+        float fogW = horizon * 12.8f;
+        float fogH = horizon * 9.6f;
+        float rotation = BlackHolePhysics.ACCRETION_DISK_ANGLE;
+        batch.setColor(1f, 1f, 1f, 0.90f);
+        batch.draw(fogTex, arenaX - fogW * 0.5f, arenaY - fogH * 0.5f,
+                fogW * 0.5f, fogH * 0.5f, fogW, fogH,
+                1f, 1f, rotation, 0, 0, fogTex.getWidth(), fogTex.getHeight(), false, false);
+    }
+
     private void drawAbsorptionFlares(ShapeRenderer shapes, BlackHoleWorld world, float horizon) {
         float arenaX = world.getArenaX();
         float arenaY = world.getArenaY();
@@ -559,26 +574,42 @@ public final class BlackHoleRenderer {
                 }
 
                 // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
-                // Extent of radius is tightly hugging the black hole radius with brilliant inner core
+                // Doubled thickness (span increased from 37px to 74px) with brilliant white inner core plateau
                 float circularHalo = 0f;
-                if (radius >= 121.0f && radius <= 158.0f) {
-                    float haloNorm = (radius - 121.0f) / 37.0f; // [0, 1] across halo span
+                if (radius >= 121.0f && radius <= 195.0f) {
+                    float haloNorm = (radius - 121.0f) / 74.0f; // [0, 1] across doubled 74px span
                     float angle = MathUtils.atan2(dy, dx);
                     // Multi-frequency organic turbulence matching jet cloud technique
-                    float turb = MathUtils.sin(angle * 6f + radius * 0.175f) * 0.06f
-                            + MathUtils.sin(angle * 11f - radius * 0.25f) * 0.03f;
+                    float turb = MathUtils.sin(angle * 6f + radius * 0.08f) * 0.05f
+                            + MathUtils.sin(angle * 11f - radius * 0.12f) * 0.025f;
                     float clampedNorm = MathUtils.clamp(haloNorm + turb, 0f, 1f);
-                    // Gaussian-like falloff: bright white right at horizon, smoothly blending outward
-                    circularHalo = (float)Math.exp(-clampedNorm * clampedNorm * 2.6f) * (1f - clampedNorm) * 1.85f;
+                    // Broad brilliant white core plateau, then smooth Gaussian falloff
+                    float corePlateau = MathUtils.clamp(1f - clampedNorm * 1.5f, 0f, 1f);
+                    circularHalo = corePlateau * 0.70f + (float)Math.exp(-clampedNorm * clampedNorm * 2.2f) * (1f - clampedNorm) * 1.65f;
                 }
 
                 // 3. Razor-thin circular photon ring right at the photon sphere
                 float photonRing = (float)Math.exp(-Math.pow(radius - 123.6f, 2) / (2f * 2.6f * 2.6f)) * 2.2f;
 
-                // 4. Shadow masking for background emission
+                // 4. Disconnected semi-circular ring streaks above and below the disc (gravitationally lensed sub-rings)
+                // Separated from the doubled halo by a clear dark space gap
+                float sinPolar = radius > 1f ? dy / radius : 0f;
+                float topWeight = MathUtils.clamp((sinPolar - 0.18f) / 0.32f, 0f, 1f);
+                topWeight *= topWeight;
+                float bottomWeight = MathUtils.clamp((-sinPolar - 0.18f) / 0.32f, 0f, 1f);
+                bottomWeight *= bottomWeight;
+
+                float upperArc1 = (float)Math.exp(-Math.pow(radius - 215.0f, 2) / (2f * 3.2f * 3.2f)) * 1.25f * topWeight;
+                float upperArc2 = (float)Math.exp(-Math.pow(radius - 239.0f, 2) / (2f * 2.6f * 2.6f)) * 0.80f * topWeight;
+                float lowerArc1 = (float)Math.exp(-Math.pow(radius - 213.0f, 2) / (2f * 3.0f * 3.0f)) * 1.10f * bottomWeight;
+                float lowerArc2 = (float)Math.exp(-Math.pow(radius - 233.0f, 2) / (2f * 2.4f * 2.4f)) * 0.65f * bottomWeight;
+                float lensedArcs = (upperArc1 + upperArc2 + lowerArc1 + lowerArc2)
+                        * (0.88f + 0.12f * MathUtils.sin(MathUtils.atan2(dy, dx) * 7f + radius * 0.18f));
+
+                // 5. Shadow masking for background emission
                 float shadowMask = MathUtils.clamp((radius - 120.0f) / 4.0f, 0f, 1f);
                 float backgroundLight = (eyeDisc + circularHalo) * shadowMask;
-                float totalEmission = backgroundLight + photonRing;
+                float totalEmission = backgroundLight + photonRing + lensedArcs;
 
                 // 5. Sub-pixel anti-aliased event horizon silhouette with smooth Hermite blending
                 // Compute continuous transition weight [0, 1]: 0 = deep black core, 1 = exterior emission
