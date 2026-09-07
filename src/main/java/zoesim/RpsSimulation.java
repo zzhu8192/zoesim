@@ -86,6 +86,7 @@ public final class RpsSimulation implements ArenaSimulation {
     private int heldStartDelta, collisions;
     private float heldStartTime, heldStartRepeat;
     private String editingValue = "";
+    private final GlyphLayout glyphLayout = new GlyphLayout();
 
     public RpsSimulation() {
         for (Kind kind : Kind.values()) start.put(kind, 22);
@@ -278,48 +279,98 @@ public final class RpsSimulation implements ArenaSimulation {
         float subtitleY = panelTop - 58f;
         float separatorY = panelTop - 82f;
 
+        float startCountBaseY = panelTop - 262f;
+        float startCountRowSpacing = 36f;
+        float btnW = 34f;
+        float btnH = 28f;
+        float btnMinusX = panelX + 52f;
+        float boxX = panelX + 92f;
+        float boxW = 68f;
+        float btnPlusX = panelX + 166f;
+
+        float speedLabelY = startCountBaseY - 2 * startCountRowSpacing - 38f;
+        float sliderY = speedLabelY - 24f;
+        float buttonY = sliderY - 38f;
+        float menuBtnY = panelBottom + 62f;
+        float taglineY = menuBtnY - 32f;
+
         shapes.begin(ShapeRenderer.ShapeType.Filled);
         shapes.setColor(.035f, .08f, .17f, .92f); shapes.rect(panelX, panelBottom, width, panelTop - panelBottom);
         shapes.setColor(.12f, .42f, .67f, .72f); shapes.rect(panelX, separatorY, width, 2);
-        if (editingKind != null) {
-            float editRow = panelTop - 275f - editingKind.ordinal() * 34f;
-            shapes.setColor(.10f, .33f, .53f, 1f); shapes.rect(panelX + 88, editRow - 22, 60, 30);
-        }
-        shapes.end();
-        batch.begin();
-        font.setColor(.72f, .92f, 1f, 1f); font.getData().setScale(1.35f); text(font, batch, "RPS ARENA", panelX + 22, headerY);
-        font.getData().setScale(0.64f); font.setColor(.5f, .68f, .84f, 1f); text(font, batch, "LAST TYPE STANDING WINS", panelX + 23, subtitleY);
-        font.getData().setScale(0.92f);
-        float row = panelTop - 112f;
+
+        // Render 3D tactile buttons and input boxes for starting counts
         for (Kind kind : Kind.values()) {
-            drawCounterSprite(kind, panelX + 31, row - 6, batch);
-            font.setColor(Color.WHITE); text(font, batch, kind.label, panelX + 58, row);
-            text(font, batch, String.valueOf(count(kind)), panelX + width - 56, row);
-            row -= 40;
+            int k = kind.ordinal();
+            float rowCenterY = startCountBaseY - k * startCountRowSpacing;
+            float btnY = rowCenterY - 14f;
+
+            // 1. Minus Button (3D beveled)
+            shapes.setColor(.03f, .09f, .16f, 1f); shapes.rect(btnMinusX, btnY - 2f, btnW, btnH + 2f);
+            shapes.setColor(.07f, .22f, .34f, 1f); shapes.rect(btnMinusX, btnY, btnW, btnH);
+            shapes.setColor(1f, 1f, 1f, .18f); shapes.rect(btnMinusX, btnY + btnH - 2f, btnW, 2f);
+            shapes.setColor(0f, 0f, 0f, .35f); shapes.rect(btnMinusX, btnY, btnW, 2f);
+
+            // 2. Input Box (recessed inset with glowing active border)
+            shapes.setColor(.02f, .05f, .09f, 1f); shapes.rect(boxX, btnY, boxW, btnH);
+            shapes.setColor(0f, 0f, 0f, .45f); shapes.rect(boxX, btnY + btnH - 2f, boxW, 2f);
+            if (editingKind == kind) shapes.setColor(.18f, .82f, 1f, .95f);
+            else shapes.setColor(.09f, .26f, .38f, .75f);
+            shapes.rect(boxX, btnY, boxW, 1f);
+            shapes.rect(boxX, btnY + btnH - 1f, boxW, 1f);
+            shapes.rect(boxX, btnY, 1f, btnH);
+            shapes.rect(boxX + boxW - 1f, btnY, 1f, btnH);
+
+            // 3. Plus Button (3D beveled)
+            shapes.setColor(.03f, .09f, .16f, 1f); shapes.rect(btnPlusX, btnY - 2f, btnW, btnH + 2f);
+            shapes.setColor(.07f, .22f, .34f, 1f); shapes.rect(btnPlusX, btnY, btnW, btnH);
+            shapes.setColor(1f, 1f, 1f, .18f); shapes.rect(btnPlusX, btnY + btnH - 2f, btnW, 2f);
+            shapes.setColor(0f, 0f, 0f, .35f); shapes.rect(btnPlusX, btnY, btnW, 2f);
         }
-        font.getData().setScale(0.68f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "CONFIGURE STARTING COUNT", panelX + 22, row - 6);
-        row -= 36;
-        for (Kind kind : Kind.values()) {
-            font.setColor(Color.WHITE);
-            font.getData().setScale(0.85f);
-            text(font, batch, kind.label.substring(0, 1), panelX + 22, row);
-            text(font, batch, "-", panelX + 58, row);
-            text(font, batch, editingKind == kind ? (editingValue.isEmpty() ? "|" : editingValue + "|") : String.valueOf(start.get(kind)), panelX + 105, row);
-            text(font, batch, "+", panelX + 175, row);
-            row -= 34;
-        }
-        font.getData().setScale(0.72f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "MOTION SPEED  " + String.format("%.1fx", speed), panelX + 22, row - 2);
-        batch.end();
-        float sliderY = row - 24;
-        shapes.begin(ShapeRenderer.ShapeType.Filled);
+
+        // Motion speed slider track
         shapes.setColor(.09f, .23f, .39f, 1f); shapes.rect(panelX + 23, sliderY, width - 46, 8);
         shapes.setColor(.14f, .8f, 1f, 1f); shapes.rect(panelX + 23, sliderY, (width - 46) * ((speed - .35f) / 2.15f), 8);
         shapes.circle(panelX + 23 + (width - 46) * ((speed - .35f) / 2.15f), sliderY + 4f, 12);
         shapes.end();
+
         batch.begin();
-        float buttonY = sliderY - 36f;
-        float menuBtnY = panelBottom + 62f;
-        float taglineY = menuBtnY - 32f;
+        font.setColor(.72f, .92f, 1f, 1f); font.getData().setScale(1.35f); text(font, batch, "RPS ARENA", panelX + 22, headerY);
+        font.getData().setScale(0.64f); font.setColor(.5f, .68f, .84f, 1f); text(font, batch, "LAST TYPE STANDING WINS", panelX + 23, subtitleY);
+        font.getData().setScale(0.92f);
+        float row = panelTop - 110f;
+        for (Kind kind : Kind.values()) {
+            drawCounterSprite(kind, panelX + 31, row - 6, batch);
+            font.setColor(Color.WHITE); text(font, batch, kind.label, panelX + 58, row);
+            text(font, batch, String.valueOf(count(kind)), panelX + width - 56, row);
+            row -= 38;
+        }
+        font.getData().setScale(0.68f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "CONFIGURE STARTING COUNT", panelX + 22, panelTop - 232f);
+
+        for (Kind kind : Kind.values()) {
+            int k = kind.ordinal();
+            float rowCenterY = startCountBaseY - k * startCountRowSpacing;
+            float textY = rowCenterY + 7f;
+
+            font.setColor(kind.bright);
+            font.getData().setScale(0.85f);
+            text(font, batch, kind.label.substring(0, 1), panelX + 26f, textY);
+
+            font.setColor(Color.WHITE);
+            font.getData().setScale(0.88f);
+            centeredText(font, batch, "-", btnMinusX + btnW * 0.5f, textY);
+
+            String val = editingKind == kind ? (editingValue.isEmpty() ? "|" : editingValue + "|") : String.valueOf(start.get(kind));
+            font.setColor(editingKind == kind ? Color.CYAN : Color.WHITE);
+            font.getData().setScale(0.82f);
+            centeredText(font, batch, val, boxX + boxW * 0.5f, textY);
+
+            font.setColor(Color.WHITE);
+            font.getData().setScale(0.88f);
+            centeredText(font, batch, "+", btnPlusX + btnW * 0.5f, textY);
+        }
+
+        font.getData().setScale(0.72f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "MOTION SPEED  " + String.format("%.1fx", speed), panelX + 22, speedLabelY);
+
         font.getData().setScale(0.80f); font.setColor(Color.WHITE); text(font, batch, paused ? "▶  RESUME" : "Ⅱ  PAUSE", panelX + 24, buttonY); text(font, batch, "↻  RESET", panelX + Math.max(170f, width * 0.48f), buttonY);
         font.setColor(.82f, .62f, 1f, 1f); font.getData().setScale(0.80f); text(font, batch, "SIMULATION MENU", panelX + 24, menuBtnY);
         font.setColor(.45f, .7f, .9f, 1f); font.getData().setScale(0.60f); text(font, batch, "PIECES " + pieces.size + "   •   CLASHES " + collisions, panelX + 24, taglineY);
@@ -330,8 +381,18 @@ public final class RpsSimulation implements ArenaSimulation {
         float x = Gdx.input.getX(), y = Gdx.graphics.getHeight() - Gdx.input.getY();
         float panelX = arenaX + arenaRadius + 42f;
         float width = Gdx.graphics.getWidth() - panelX - 32f;
-        float row = Gdx.graphics.getHeight() - 361;
-        float sliderY = row - 3 * 38 - 24;
+        float H = Gdx.graphics.getHeight();
+
+        float panelBottom = 68f;
+        float panelTop = H - 48f;
+        float startCountBaseY = panelTop - 262f;
+        float startCountRowSpacing = 36f;
+
+        float speedLabelY = startCountBaseY - 2 * startCountRowSpacing - 38f;
+        float sliderY = speedLabelY - 24f;
+        float buttonY = sliderY - 38f;
+        float menuBtnY = panelBottom + 62f;
+
         float dt = Math.min(Gdx.graphics.getDeltaTime(), .1f);
         if (!Gdx.input.isTouched()) { draggingSpeed = false; heldStartKind = null; return; }
         if (draggingSpeed) { setSpeedFromX(x, panelX, width); return; }
@@ -344,19 +405,25 @@ public final class RpsSimulation implements ArenaSimulation {
             return;
         }
         if (!Gdx.input.justTouched()) return;
-        if (x > panelX + 12 && x < panelX + width - 12 && y > 120 && y < 172) { menuRequested = true; return; }
-        if (x > panelX + 15 && x < panelX + width - 15 && Math.abs(y - sliderY) < 24) {
+        if (x > panelX + 12 && x < panelX + width - 12 && Math.abs(y - menuBtnY) < 22) { menuRequested = true; return; }
+        if (x > panelX + 15 && x < panelX + width - 15 && Math.abs(y - sliderY) < 18) {
             draggingSpeed = true; setSpeedFromX(x, panelX, width); return;
         }
         for (Kind kind : Kind.values()) {
-            if (x > panelX + 40 && x < panelX + 85 && Math.abs(y - row) < 24) { startHold(kind, -1); return; }
-            if (x > panelX + 155 && x < panelX + 210 && Math.abs(y - row) < 24) { startHold(kind, 1); return; }
-            if (x > panelX + 85 && x < panelX + 155 && Math.abs(y - row) < 24) { beginEdit(kind); return; }
-            row -= 38;
+            int k = kind.ordinal();
+            float rowCenterY = startCountBaseY - k * startCountRowSpacing;
+            if (Math.abs(y - rowCenterY) < 18) {
+                // Minus button hit zone:
+                if (x >= panelX + 44 && x <= panelX + 88) { startHold(kind, -1); return; }
+                // Input box hit zone:
+                if (x > panelX + 88 && x < panelX + 162) { beginEdit(kind); return; }
+                // Plus button hit zone:
+                if (x >= panelX + 162 && x <= panelX + 210) { startHold(kind, 1); return; }
+            }
         }
-        if (y > sliderY - 62 && y < sliderY - 15) {
-            if (x < panelX + 165) paused = !paused;
-            else if (x < panelX + 330) reset();
+        if (Math.abs(y - buttonY) < 22) {
+            if (x >= panelX + 15 && x < panelX + Math.max(160f, width * 0.46f)) paused = !paused;
+            else if (x >= panelX + Math.max(160f, width * 0.46f) && x < panelX + width - 10) reset();
         }
     }
 
@@ -414,6 +481,11 @@ public final class RpsSimulation implements ArenaSimulation {
         font.draw(batch, value, x + 1.8f, y - 1.8f);
         font.setColor(r, g, b, a);
         font.draw(batch, value, x, y);
+    }
+
+    private void centeredText(BitmapFont font, SpriteBatch batch, String value, float centerX, float y) {
+        glyphLayout.setText(font, value);
+        text(font, batch, value, centerX - glyphLayout.width * 0.5f, y);
     }
 
     private Texture createRockSprite() {

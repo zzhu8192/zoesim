@@ -4,12 +4,14 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 
 /** User interface and input handling: telemetry, steppers, speed slider, and buttons. */
 public final class BlackHoleUI {
+    private final GlyphLayout glyphLayout = new GlyphLayout();
     private boolean draggingSpeed;
     private boolean draggingGrowth;
     private boolean editingCount;
@@ -69,10 +71,38 @@ public final class BlackHoleUI {
         shapes.setColor(1f, 1f, 1f, 0.06f);
         shapes.rect(panelX + 24, cardBottom + 64f, width - 48, 1);
 
+        // Stepper controls (3D buttons & recessed box)
+        float btnW = 34f;
+        float btnH = 26f;
+        float boxW = 72f;
+        float btnMinusX = panelX + 50f;
+        float boxX = panelX + 90f;
+        float btnPlusX = panelX + 168f;
+        float btnY = countRow - 13f;
+
+        // Minus button (3D beveled)
+        shapes.setColor(.03f, .09f, .16f, 1f); shapes.rect(btnMinusX, btnY - 2f, btnW, btnH + 2f);
+        shapes.setColor(.07f, .22f, .34f, 1f); shapes.rect(btnMinusX, btnY, btnW, btnH);
+        shapes.setColor(1f, 1f, 1f, .18f); shapes.rect(btnMinusX, btnY + btnH - 2f, btnW, 2f);
+        shapes.setColor(0f, 0f, 0f, .35f); shapes.rect(btnMinusX, btnY, btnW, 2f);
+
+        // Recessed input box
+        shapes.setColor(.02f, .05f, .09f, 1f); shapes.rect(boxX, btnY, boxW, btnH);
         if (editingCount) {
-            shapes.setColor(.11f, .19f, .27f, 1f);
-            shapes.rect(panelX + 96, countRow - 22, 68, 30);
+            shapes.setColor(.14f, .8f, 1f, .9f);
+        } else {
+            shapes.setColor(.06f, .16f, .26f, .85f);
         }
+        shapes.rect(boxX, btnY, boxW, 1f);
+        shapes.rect(boxX, btnY + btnH - 1f, boxW, 1f);
+        shapes.rect(boxX, btnY, 1f, btnH);
+        shapes.rect(boxX + boxW - 1f, btnY, 1f, btnH);
+
+        // Plus button (3D beveled)
+        shapes.setColor(.03f, .09f, .16f, 1f); shapes.rect(btnPlusX, btnY - 2f, btnW, btnH + 2f);
+        shapes.setColor(.07f, .22f, .34f, 1f); shapes.rect(btnPlusX, btnY, btnW, btnH);
+        shapes.setColor(1f, 1f, 1f, .18f); shapes.rect(btnPlusX, btnY + btnH - 2f, btnW, 2f);
+        shapes.setColor(0f, 0f, 0f, .35f); shapes.rect(btnPlusX, btnY, btnW, 2f);
 
         // 1. Time scale slider (0.1x - 10.0x)
         float speedFrac = MathUtils.clamp((speed - 0.10f) / 9.90f, 0f, 1f);
@@ -125,11 +155,19 @@ public final class BlackHoleUI {
         font.getData().setScale(0.68f);
         text(font, batch, "PARTICLE SEED", panelX + 28, cardBottom + 52f);
 
+        float textY = countRow + 7f;
         font.setColor(Color.WHITE);
-        font.getData().setScale(0.85f);
-        text(font, batch, "-", panelX + 54, countRow);
-        text(font, batch, editingCount ? (countValue.isEmpty() ? "|" : countValue + "|") : String.valueOf(world.getStartCount()), panelX + 112, countRow);
-        text(font, batch, "+", panelX + 185, countRow);
+        font.getData().setScale(0.88f);
+        centeredText(font, batch, "-", btnMinusX + btnW * 0.5f, textY);
+
+        String val = editingCount ? (countValue.isEmpty() ? "|" : countValue + "|") : String.valueOf(world.getStartCount());
+        font.setColor(editingCount ? Color.CYAN : Color.WHITE);
+        font.getData().setScale(0.82f);
+        centeredText(font, batch, val, boxX + boxW * 0.5f, textY);
+
+        font.setColor(Color.WHITE);
+        font.getData().setScale(0.88f);
+        centeredText(font, batch, "+", btnPlusX + btnW * 0.5f, textY);
 
         // 3. Sliders labels
         font.setColor(.55f, .71f, .81f, 1f);
@@ -212,18 +250,20 @@ public final class BlackHoleUI {
             menuRequested = true;
             return;
         }
-        if (x > panelX + 35 && x < panelX + 85 && Math.abs(y - countRow) < 22) {
-            startCountHold(world, -1);
-            return;
-        }
-        if (x > panelX + 165 && x < panelX + 215 && Math.abs(y - countRow) < 22) {
-            startCountHold(world, 1);
-            return;
-        }
-        if (x > panelX + 85 && x < panelX + 165 && Math.abs(y - countRow) < 22) {
-            editingCount = true;
-            countValue = "";
-            return;
+        if (Math.abs(y - countRow) < 18) {
+            if (x >= panelX + 44 && x <= panelX + 88) {
+                startCountHold(world, -1);
+                return;
+            }
+            if (x > panelX + 88 && x < panelX + 162) {
+                editingCount = true;
+                countValue = "";
+                return;
+            }
+            if (x >= panelX + 162 && x <= panelX + 210) {
+                startCountHold(world, 1);
+                return;
+            }
         }
         if (x > panelX + 15 && x < panelX + width - 15 && Math.abs(y - speedSliderY) < 18) {
             draggingSpeed = true;
@@ -307,6 +347,11 @@ public final class BlackHoleUI {
         font.draw(batch, value, x + 1.8f, y - 1.8f);
         font.setColor(r, g, b, a);
         font.draw(batch, value, x, y);
+    }
+
+    private void centeredText(BitmapFont font, SpriteBatch batch, String value, float centerX, float y) {
+        glyphLayout.setText(font, value);
+        text(font, batch, value, centerX - glyphLayout.width * 0.5f, y);
     }
 
     public boolean consumeMenuRequest() {
