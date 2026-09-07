@@ -574,30 +574,35 @@ public final class BlackHoleRenderer {
                 }
 
                 // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
-                // Doubled thickness with brilliant white inner core plateau and imperfect circular blemishes/striations
+                // Distinct top/bottom asymmetry: top lensed canopy is significantly thicker (reaches ~230px, span 109px),
+                // while bottom arch is noticeably more compact and hugs closer to the horizon (reaches ~162px, span 41px)
                 float circularHalo = 0f;
                 float sinPolar = radius > 1f ? dy / radius : 0f;
-                // Natural top/bottom asymmetry in halo extent: top arch extends slightly wider (202px) than bottom arch (186px)
-                float rOut = 194.0f + 8.0f * sinPolar;
+                float rOut;
+                if (sinPolar >= 0f) {
+                    rOut = 188.0f + 42.0f * (float)Math.pow(sinPolar, 1.15f);
+                } else {
+                    rOut = 188.0f - 26.0f * (float)Math.pow(-sinPolar, 1.15f);
+                }
                 if (radius >= 121.0f && radius <= rOut) {
-                    float haloNorm = (radius - 121.0f) / (rOut - 121.0f); // [0, 1] across doubled span
+                    float haloNorm = (radius - 121.0f) / (rOut - 121.0f); // [0, 1] across asymmetric span
                     float angle = MathUtils.atan2(dy, dx);
                     boolean isTop = dy >= 0f;
                     float blemishPhase = isTop ? 1.73f : 4.89f;
 
                     // Imperfect radial wobble (angular perturbation making concentric striations organic rather than sterile)
                     float angleWobble = isTop
-                            ? (MathUtils.sin(angle * 3f + 1.2f) * 2.4f + MathUtils.cos(angle * 5f - 0.7f) * 1.5f)
-                            : (MathUtils.sin(angle * 4f + 2.8f) * 1.9f + MathUtils.cos(angle * 2f + 1.1f) * 1.7f);
+                            ? (MathUtils.sin(angle * 3f + 1.2f) * 2.8f + MathUtils.cos(angle * 5f - 0.7f) * 1.8f)
+                            : (MathUtils.sin(angle * 4f + 2.8f) * 1.5f + MathUtils.cos(angle * 2f + 1.1f) * 1.2f);
                     float rPerturbed = radius + angleWobble;
 
                     // Imperfect concentric striation ripples embedded directly in the halo body (asymmetric frequencies/phases)
                     float striation1 = isTop
-                            ? MathUtils.sin(rPerturbed * 0.32f + 1.1f) * 0.18f
-                            : MathUtils.sin(rPerturbed * 0.38f + 3.4f) * 0.16f;
+                            ? MathUtils.sin(rPerturbed * 0.28f + 1.1f) * 0.18f
+                            : MathUtils.sin(rPerturbed * 0.45f + 3.4f) * 0.15f;
                     float striation2 = isTop
-                            ? MathUtils.sin(rPerturbed * 0.58f - 2.3f) * 0.12f
-                            : MathUtils.sin(rPerturbed * 0.64f - 0.9f) * 0.10f;
+                            ? MathUtils.sin(rPerturbed * 0.50f - 2.3f) * 0.12f
+                            : MathUtils.sin(rPerturbed * 0.85f - 0.9f) * 0.09f;
                     float striations = striation1 + striation2;
 
                     // Multi-octave organic cloudy blemishes (patchy gaseous density variations across angle and radius)
@@ -606,20 +611,24 @@ public final class BlackHoleRenderer {
                     float blemish3 = MathUtils.cos(angle * (isTop ? 12f : 10f) + radius * 0.14f);
                     float cloudNoise = (blemish1 * 0.45f + blemish2 * 0.35f + blemish3 * 0.20f);
 
-                    // Secondary subtle lensed crest nestled right within the halo flank (closer to the light halo)
-                    float crestR = isTop ? 173.0f : 163.0f;
-                    float crestWidth = isTop ? 7.0f : 5.5f;
+                    // Secondary subtle lensed crest nestled within outer halo (scaled to respective arch spans)
+                    float crestR = isTop ? 182.0f : 148.0f;
+                    float crestWidth = isTop ? 8.5f : 4.5f;
                     float haloCrest = (float)Math.exp(-Math.pow(rPerturbed - crestR, 2) / (2f * crestWidth * crestWidth))
-                            * (isTop ? 0.38f : 0.26f) * (0.85f + 0.15f * blemish1);
+                            * (isTop ? 0.40f : 0.22f) * (0.85f + 0.15f * blemish1);
 
                     // Blemish modulation weighting: inner rim near horizon remains solid brilliant white core plateau,
                     // while mid and outer halo display the rich organic striations and blemishes
                     float blemishWeight = MathUtils.clamp((haloNorm - 0.12f) / 0.30f, 0f, 1f) * (1f - haloNorm * 0.75f);
                     float blemishMod = 1.0f + (striations + cloudNoise * 0.22f) * blemishWeight;
 
-                    float corePlateau = MathUtils.clamp(1f - haloNorm * 1.5f, 0f, 1f);
-                    float baseHalo = corePlateau * 0.70f + (float)Math.exp(-haloNorm * haloNorm * 2.2f) * (1f - haloNorm) * 1.65f;
-                    circularHalo = baseHalo * Math.max(0.15f, blemishMod) + haloCrest;
+                    float corePlateau = isTop
+                            ? MathUtils.clamp(1f - haloNorm * 1.35f, 0f, 1f)
+                            : MathUtils.clamp(1f - haloNorm * 1.80f, 0f, 1f);
+                    float falloffDecay = isTop ? 2.1f : 2.6f;
+                    float baseHalo = corePlateau * 0.70f + (float)Math.exp(-haloNorm * haloNorm * falloffDecay) * (1f - haloNorm) * 1.65f;
+                    float intensityScale = isTop ? 1.0f : 0.76f;
+                    circularHalo = (baseHalo * Math.max(0.15f, blemishMod) + haloCrest) * intensityScale;
                 }
 
                 // 3. Razor-thin circular photon ring right at the photon sphere
