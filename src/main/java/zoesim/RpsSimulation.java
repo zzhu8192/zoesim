@@ -270,35 +270,38 @@ public final class RpsSimulation implements ArenaSimulation {
     private void drawInterface(ShapeRenderer shapes, SpriteBatch batch, BitmapFont font) {
         float panelX = arenaX + arenaRadius + 42f;
         float width = Gdx.graphics.getWidth() - panelX - 32f;
+        float H = Gdx.graphics.getHeight();
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(.035f, .08f, .17f, .92f); shapes.rect(panelX, 86, width, Gdx.graphics.getHeight() - 172);
-        shapes.setColor(.12f, .42f, .67f, .72f); shapes.rect(panelX, Gdx.graphics.getHeight() - 132, width, 2);
+        shapes.setColor(.035f, .08f, .17f, .92f); shapes.rect(panelX, 76, width, H - 152);
+        shapes.setColor(.12f, .42f, .67f, .72f); shapes.rect(panelX, H - 132, width, 2);
         if (editingKind != null) {
-            float editRow = Gdx.graphics.getHeight() - 361 - editingKind.ordinal() * 38f;
-            shapes.setColor(.10f, .33f, .53f, 1f); shapes.rect(panelX + 84, editRow - 27, 49, 34);
+            float editRow = H - 361 - editingKind.ordinal() * 38f;
+            shapes.setColor(.10f, .33f, .53f, 1f); shapes.rect(panelX + 88, editRow - 27, 60, 36);
         }
         shapes.end();
         batch.begin();
-        font.setColor(.72f, .92f, 1f, 1f); font.getData().setScale(2.05f); text(font, batch, "RPS ARENA", panelX + 22, Gdx.graphics.getHeight() - 84);
-        font.getData().setScale(1.02f); font.setColor(.5f, .68f, .84f, 1f); text(font, batch, "LAST TYPE STANDING WINS", panelX + 23, Gdx.graphics.getHeight() - 115);
-        font.getData().setScale(1.45f);
-        float row = Gdx.graphics.getHeight() - 177;
+        font.setColor(.72f, .92f, 1f, 1f); font.getData().setScale(1.75f); text(font, batch, "RPS ARENA", panelX + 22, H - 76);
+        font.getData().setScale(0.88f); font.setColor(.5f, .68f, .84f, 1f); text(font, batch, "LAST TYPE STANDING WINS", panelX + 23, H - 114);
+        font.getData().setScale(1.15f);
+        float row = H - 175;
         for (Kind kind : Kind.values()) {
-            drawCounterSprite(kind, panelX + 31, row - 8, batch);
-            font.setColor(Color.WHITE); text(font, batch, kind.label, panelX + 55, row);
-            text(font, batch, String.valueOf(count(kind)), panelX + width - 47, row);
-            row -= 47;
+            drawCounterSprite(kind, panelX + 31, row - 6, batch);
+            font.setColor(Color.WHITE); text(font, batch, kind.label, panelX + 58, row);
+            text(font, batch, String.valueOf(count(kind)), panelX + width - 56, row);
+            row -= 48;
         }
-        font.getData().setScale(1f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "CONFIGURE STARTING COUNT", panelX + 22, row - 8);
-        row -= 43;
+        font.getData().setScale(0.84f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "CONFIGURE STARTING COUNT", panelX + 22, row - 8);
+        row -= 44;
         for (Kind kind : Kind.values()) {
-            font.setColor(Color.WHITE); text(font, batch, kind.label.substring(0, 1), panelX + 22, row);
-            text(font, batch, "-", panelX + 61, row);
-            text(font, batch, editingKind == kind ? (editingValue.isEmpty() ? "|" : editingValue + "|") : String.valueOf(start.get(kind)), panelX + 93, row);
-            text(font, batch, "+", panelX + 150, row);
+            font.setColor(Color.WHITE);
+            font.getData().setScale(1.00f);
+            text(font, batch, kind.label.substring(0, 1), panelX + 22, row);
+            text(font, batch, "-", panelX + 58, row);
+            text(font, batch, editingKind == kind ? (editingValue.isEmpty() ? "|" : editingValue + "|") : String.valueOf(start.get(kind)), panelX + 105, row);
+            text(font, batch, "+", panelX + 175, row);
             row -= 38;
         }
-        font.getData().setScale(1.03f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "MOTION SPEED  " + String.format("%.1fx", speed), panelX + 22, row - 2);
+        font.getData().setScale(0.88f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "MOTION SPEED  " + String.format("%.1fx", speed), panelX + 22, row - 2);
         batch.end();
         float sliderY = row - 24;
         shapes.begin(ShapeRenderer.ShapeType.Filled);
@@ -307,9 +310,9 @@ public final class RpsSimulation implements ArenaSimulation {
         shapes.circle(panelX + 23 + (width - 46) * ((speed - .35f) / 2.15f), sliderY + 4.5f, 13);
         shapes.end();
         batch.begin();
-        font.getData().setScale(1.12f); font.setColor(Color.WHITE); text(font, batch, paused ? "▶  RESUME" : "Ⅱ  PAUSE", panelX + 24, sliderY - 37); text(font, batch, "↻  RESET", panelX + 153, sliderY - 37);
-        font.setColor(.82f, .62f, 1f, 1f); font.getData().setScale(1.02f); text(font, batch, "SIMULATION MENU", panelX + 24, 157);
-        font.setColor(.45f, .7f, .9f, 1f); font.getData().setScale(.93f); text(font, batch, "PIECES " + pieces.size + "   •   CLASHES " + collisions, panelX + 24, 114);
+        font.getData().setScale(0.96f); font.setColor(Color.WHITE); text(font, batch, paused ? "▶  RESUME" : "Ⅱ  PAUSE", panelX + 24, sliderY - 38); text(font, batch, "↻  RESET", panelX + 185, sliderY - 38);
+        font.setColor(.82f, .62f, 1f, 1f); font.getData().setScale(0.95f); text(font, batch, "SIMULATION MENU", panelX + 24, 154);
+        font.setColor(.45f, .7f, .9f, 1f); font.getData().setScale(0.78f); text(font, batch, "PIECES " + pieces.size + "   •   CLASHES " + collisions, panelX + 24, 112);
         batch.end();
     }
 
@@ -331,19 +334,19 @@ public final class RpsSimulation implements ArenaSimulation {
             return;
         }
         if (!Gdx.input.justTouched()) return;
-        if (x > panelX + 12 && x < panelX + width - 12 && y > 132 && y < 178) { menuRequested = true; return; }
+        if (x > panelX + 12 && x < panelX + width - 12 && y > 120 && y < 172) { menuRequested = true; return; }
         if (x > panelX + 15 && x < panelX + width - 15 && Math.abs(y - sliderY) < 24) {
             draggingSpeed = true; setSpeedFromX(x, panelX, width); return;
         }
         for (Kind kind : Kind.values()) {
-            if (x > panelX + 45 && x < panelX + 87 && Math.abs(y - row) < 22) { startHold(kind, -1); return; }
-            if (x > panelX + 130 && x < panelX + 180 && Math.abs(y - row) < 22) { startHold(kind, 1); return; }
-            if (x > panelX + 84 && x < panelX + 138 && Math.abs(y - row) < 22) { beginEdit(kind); return; }
+            if (x > panelX + 40 && x < panelX + 85 && Math.abs(y - row) < 24) { startHold(kind, -1); return; }
+            if (x > panelX + 155 && x < panelX + 210 && Math.abs(y - row) < 24) { startHold(kind, 1); return; }
+            if (x > panelX + 85 && x < panelX + 155 && Math.abs(y - row) < 24) { beginEdit(kind); return; }
             row -= 38;
         }
         if (y > sliderY - 62 && y < sliderY - 15) {
-            if (x < panelX + 145) paused = !paused;
-            else if (x < panelX + 285) reset();
+            if (x < panelX + 165) paused = !paused;
+            else if (x < panelX + 330) reset();
         }
     }
 

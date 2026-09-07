@@ -31,8 +31,7 @@ public final class SimArena extends ApplicationAdapter {
     @Override public void create() {
         shapes = new ShapeRenderer();
         batch = new SpriteBatch();
-        font = new BitmapFont();
-        font.getData().setScale(1.45f);
+        font = CrispFont.createDefault();
         layout = new GlyphLayout();
         camera = new OrthographicCamera();
         rps = new RpsSimulation();
@@ -89,7 +88,7 @@ public final class SimArena extends ApplicationAdapter {
     private void resizeWorld() {
         camera.setToOrtho(false, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         camera.update();
-        float panelWidth = MathUtils.clamp(Gdx.graphics.getWidth() * .27f, 280f, 390f);
+        float panelWidth = MathUtils.clamp(Gdx.graphics.getWidth() * .31f, 360f, 480f);
         float left = 42f;
         float usable = Gdx.graphics.getWidth() - panelWidth - left - 60f;
         arenaRadius = Math.min(usable * .5f, Gdx.graphics.getHeight() * .40f);
