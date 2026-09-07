@@ -178,7 +178,6 @@ Use `images/blackhole.png` and the newer `images/blackhole2.png` as visual direc
   - `BlackHoleSimulation.java` — top-level `ArenaSimulation` coordinator and backward-compatible facade.
 - `src/main/java/zoesim/SimulationMenu.java` — menu rendering and selection.
 - `src/main/resources/sounds/` — CC0 audio assets and licenses.
-- `images/a.jpg`, `images/b.jpg` — original RPS reference photos.
 - `images/blackhole.png`, `images/blackhole2.png` — black-hole/accretion-disk visual references.
 
 ## Follow-up quality bar
