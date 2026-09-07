@@ -386,9 +386,9 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     private void drawAccretionLights(float horizon, boolean front) {
         float rotation = ACCRETION_DISK_ANGLE * MathUtils.degreesToRadians;
         float cosRotation = MathUtils.cos(rotation), sinRotation = MathUtils.sin(rotation);
-        for (int lane = 0; lane < 4; lane++) {
-            int knotCount = 25 + lane * 7;
-            float orbit = horizon * (1.21f + lane * .20f), flatten = .21f + lane * .025f;
+        for (int lane = 0; lane < 5; lane++) {
+            int knotCount = 28 + lane * 8;
+            float orbit = horizon * (1.17f + lane * .19f), flatten = .16f + lane * .022f;
             for (int i = 0; i < knotCount; i++) {
                 float randomness = randomUnit(i + lane * 101);
                 float orbitSpeed = .78f + randomUnit(i * 7 + lane * 307) * .58f - lane * .08f;
@@ -408,18 +408,25 @@ public final class BlackHoleSimulation implements ArenaSimulation {
                 for (int trail = trailPoints - 1; trail >= 0; trail--) {
                     float trailPhase = phase - trail * (.018f + knot * .010f);
                     float trailX = MathUtils.cos(trailPhase) * orbit * radialNoise;
-                    float trailY = MathUtils.sin(trailPhase) * orbit * flatten * radialNoise;
+                    float phaseSine = MathUtils.sin(trailPhase);
+                    float trailY = phaseSine * orbit * flatten * radialNoise;
+                    if (!front) {
+                        // Light from the far side is bent into the high arch seen above the shadow.
+                        float lensLift = horizon * (.34f + lane * .025f)
+                                * (float)Math.pow(Math.max(0f, phaseSine), .58f);
+                        trailY += lensLift;
+                    }
                     float x = arenaX + trailX * cosRotation - trailY * sinRotation;
                     float y = arenaY + trailX * sinRotation + trailY * cosRotation;
                     float trailFade = 1f - trail / (float)(trailPoints + 1);
                     float red = 1f;
-                    float green = .28f + temperature * .68f;
-                    float blue = .035f + temperature * temperature * .91f;
+                    float green = .60f + temperature * .39f;
+                    float blue = .52f + temperature * temperature * .47f;
                     shapes.setColor(red, green, blue, alpha * trailFade * .16f);
-                    shapes.circle(x, y, .85f + knot * 1.45f, 10);
+                    shapes.circle(x, y, 1.0f + knot * 1.75f, 10);
                     shapes.setColor(1f, Math.min(1f, green + .12f), Math.min(1f, blue + .18f),
                             alpha * trailFade);
-                    shapes.circle(x, y, .18f + knot * .48f, 8);
+                    shapes.circle(x, y, .20f + knot * .54f, 8);
                 }
             }
         }
@@ -684,29 +691,58 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
             float dx = x - center, dy = y - center;
             float radius = (float)Math.sqrt(dx * dx + dy * dy);
-            if (radius > 187f) continue;
-            float flattenedY = dy * 2.62f;
+            if (radius > 191f) continue;
+
+            // A thin, optically bright disk viewed almost edge-on.
+            float flattenedY = dy * 3.45f;
             float diskRadius = (float)Math.sqrt(dx * dx + flattenedY * flattenedY);
             float azimuth = MathUtils.atan2(flattenedY, dx);
-            float innerDisk = gaussian(diskRadius, 91f, 7.5f);
-            float hotEdge = gaussian(diskRadius, 105f, 13f);
-            float outerDisk = gaussian(diskRadius, 132f, 28f) * .46f;
-            float turbulence = .72f + .15f * MathUtils.sin(azimuth * 19f + diskRadius * .39f)
-                    + .10f * MathUtils.sin(azimuth * 31f - diskRadius * .16f);
-            float disk = Math.max(0f, (innerDisk + hotEdge + outerDisk) * turbulence);
-            float heat = MathUtils.clamp(1.32f - diskRadius / 155f, .08f, 1f);
-            float approaching = MathUtils.clamp(.48f - dx / 235f, .18f, 1f);
-            float lensing = gaussian(radius, 76f, 4.5f) * (.48f + Math.max(0f, -dy / 95f) * .42f);
-            float dustGlow = gaussian(radius, 133f, 47f) * .055f;
-            if (radius < 72f) {
-                float edge = MathUtils.clamp((72f - radius) / 3f, 0f, 1f);
-                map.setColor(.0002f, .00025f, .0005f, .94f + edge * .06f);
+            float innerDisk = gaussian(diskRadius, 88f, 7f);
+            float hotDisk = gaussian(diskRadius, 108f, 18f);
+            float outerDisk = gaussian(diskRadius, 145f, 38f) * .48f;
+            float turbulence = .72f + .13f * MathUtils.sin(azimuth * 17f + diskRadius * .36f)
+                    + .09f * MathUtils.sin(azimuth * 29f - diskRadius * .19f)
+                    + .06f * MathUtils.sin(dx * .23f + dy * .41f);
+            float disk = Math.max(0f, (innerDisk + hotDisk + outerDisk) * turbulence);
+
+            // The far side of the disk is gravitationally lensed into two broad arches.
+            float normalizedX = Math.min(1f, Math.abs(dx) / 119f);
+            float arcHeight = 17f + 63f * (float)Math.sqrt(Math.max(0f, 1f - normalizedX * normalizedX));
+            float arc = gaussian(Math.abs(dy), arcHeight, 8.5f)
+                    * gaussian(Math.abs(dx), 51f, 82f);
+            float arcFilaments = .76f + .15f * MathUtils.sin(radius * .43f + azimuth * 13f)
+                    + .09f * MathUtils.sin(radius * .19f - azimuth * 23f);
+            arc = Math.max(0f, arc * arcFilaments);
+
+            float horizontalEnvelope = gaussian(Math.abs(dx), 76f, 112f);
+            float equatorialBloom = gaussian(dy, 0f, 9.5f) * horizontalEnvelope;
+            float equatorialCore = gaussian(dy, 0f, 1.65f) * horizontalEnvelope;
+            float photonRing = gaussian(radius, 72f, 1.45f);
+            float halo = gaussian(radius, 102f, 64f) * .14f;
+            float wideRoseGlow = gaussian(radius, 132f, 76f) * .045f;
+            float approaching = MathUtils.clamp(.74f - dx / 360f, .48f, 1f);
+
+            boolean inShadow = radius < 69.5f;
+            float visibleDisk = inShadow ? 0f : disk * approaching;
+            float visibleArc = inShadow ? 0f : arc;
+            float visiblePhotonRing = inShadow && radius < 68f ? 0f : photonRing;
+            // The front edge of the disk crosses the silhouette as a razor-thin white band.
+            float foregroundBand = equatorialCore * (.72f + .28f * approaching);
+
+            float emission = visibleDisk + visibleArc * .92f + foregroundBand * 1.7f;
+            float red = emission * 1.08f + equatorialBloom * .31f + visiblePhotonRing * 1.04f
+                    + halo * .82f + wideRoseGlow;
+            float green = emission * .91f + equatorialBloom * .24f + visiblePhotonRing * .93f
+                    + halo * .58f + wideRoseGlow * .66f;
+            float blue = emission * .94f + equatorialBloom * .29f + visiblePhotonRing * .97f
+                    + halo * .69f + wideRoseGlow * .82f;
+            float alpha = MathUtils.clamp(emission * .88f + equatorialBloom * .30f
+                    + visiblePhotonRing * .92f + halo + wideRoseGlow, 0f, .995f);
+
+            if (inShadow && foregroundBand < .035f) {
+                float shadowEdge = MathUtils.clamp((69.5f - radius) / 2.5f, 0f, 1f);
+                map.setColor(.0001f, .00012f, .0002f, .95f + shadowEdge * .05f);
             } else {
-                float energy = disk * (.48f + approaching * .75f);
-                float red = energy * (.74f + heat * .33f) + lensing * .78f + dustGlow * .16f;
-                float green = energy * (.14f + heat * .72f) + lensing * .48f + dustGlow * .12f;
-                float blue = energy * (.018f + heat * heat * .69f) + lensing * .20f + dustGlow * .20f;
-                float alpha = MathUtils.clamp(disk * .88f + lensing * .72f + dustGlow, 0f, .99f);
                 map.setColor(Math.min(1f, red), Math.min(1f, green), Math.min(1f, blue), alpha);
             }
             map.drawPixel(x, y);
