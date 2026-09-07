@@ -19,6 +19,7 @@ public final class CelestialTextureBank {
     private final Texture jetCloudTexture;
     private final Texture accretionCloudTexture;
     private final Texture foggyBulbTexture;
+    private final Texture nebulaCloudTexture;
 
     public CelestialTextureBank() {
         Pixmap atlasMap = new Pixmap(FRAME_COUNT * FRAME_SIZE, BODY_TYPE_COUNT * FRAME_SIZE, Pixmap.Format.RGBA8888);
@@ -48,6 +49,7 @@ public final class CelestialTextureBank {
         jetCloudTexture = createJetCloudTexture();
         accretionCloudTexture = createAccretionCloudTexture();
         foggyBulbTexture = createFoggyBulbTexture();
+        nebulaCloudTexture = createNebulaCloudTexture();
     }
 
     public TextureRegion getFrame(int bodyType, float rotation) {
@@ -68,6 +70,10 @@ public final class CelestialTextureBank {
 
     public Texture getFoggyBulbTexture() {
         return foggyBulbTexture;
+    }
+
+    public Texture getNebulaCloudTexture() {
+        return nebulaCloudTexture;
     }
 
     private static void renderBodyFrame(Pixmap map, int type, int originX, int originY, float rotAngle) {
@@ -430,10 +436,58 @@ public final class CelestialTextureBank {
         return texture;
     }
 
+    private static Texture createNebulaCloudTexture() {
+        final int size = 128;
+        final float center = size * 0.5f;
+        final float maxRadius = size * 0.5f - 2f;
+        Pixmap map = new Pixmap(size, size, Pixmap.Format.RGBA8888);
+        map.setBlending(Pixmap.Blending.None);
+        map.setColor(0f, 0f, 0f, 0f);
+        map.fill();
+
+        for (int y = 0; y < size; y++) {
+            for (int x = 0; x < size; x++) {
+                float dx = x - center + 0.5f;
+                float dy = y - center + 0.5f;
+                float dist = (float)Math.sqrt(dx * dx + dy * dy);
+                if (dist >= maxRadius) continue;
+
+                float u = dist / maxRadius; // [0, 1]
+                float angle = MathUtils.atan2(dy, dx);
+
+                // Multi-frequency organic turbulence matching ejection cloud style
+                float turb = MathUtils.sin(angle * 4f + dist * 0.16f) * 0.14f
+                        + MathUtils.sin(angle * 7f - dist * 0.26f) * 0.09f
+                        + MathUtils.cos(angle * 11f + dist * 0.40f) * 0.05f;
+                float normDist = MathUtils.clamp(u + turb, 0f, 1f);
+
+                // Soft Gaussian falloff with wispy outer filament taper
+                float core = (float)Math.exp(-normDist * normDist * 2.8f) * (1f - normDist);
+                float alpha = MathUtils.clamp(core * 0.88f, 0f, 1f);
+
+                // Cloudy dark grey/brown nebula color:
+                // Denser center: warm smoky umber / dark brown-charcoal (0.28, 0.20, 0.15)
+                // Outer wispy fringe: cool dark smoky grey / ash (0.16, 0.14, 0.13)
+                float red = MathUtils.lerp(0.16f, 0.29f, core);
+                float green = MathUtils.lerp(0.13f, 0.21f, core);
+                float blue = MathUtils.lerp(0.11f, 0.16f, core);
+
+                map.setColor(red, green, blue, alpha);
+                map.drawPixel(x, y);
+            }
+        }
+
+        Texture texture = new Texture(map);
+        map.dispose();
+        texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        return texture;
+    }
+
     public void dispose() {
         atlasTexture.dispose();
         jetCloudTexture.dispose();
         accretionCloudTexture.dispose();
         foggyBulbTexture.dispose();
+        nebulaCloudTexture.dispose();
     }
 }
