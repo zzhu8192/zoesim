@@ -356,10 +356,10 @@ public final class CelestialTextureBank {
                 float core = (float)Math.exp(-normDist * normDist * 3.4f) * (1f - normDist);
                 float alpha = MathUtils.clamp(core, 0f, 1f);
 
-                // Intense white-gold plasma core fading to warm champagne and luminous amber
-                float red = MathUtils.lerp(0.95f, 1.0f, core);
-                float green = MathUtils.lerp(0.68f, 0.98f, (float)Math.pow(core, 0.8f));
-                float blue = MathUtils.lerp(0.32f, 0.94f, (float)Math.pow(core, 1.6f));
+                // Pure diamond-white plasma core with ultra-high luminance
+                float red = 1.0f;
+                float green = MathUtils.lerp(0.96f, 1.0f, (float)Math.pow(core, 0.5f));
+                float blue = MathUtils.lerp(0.92f, 1.0f, (float)Math.pow(core, 0.5f));
 
                 map.setColor(red, green, blue, alpha);
                 map.drawPixel(x, y);

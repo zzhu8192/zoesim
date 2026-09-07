@@ -128,10 +128,11 @@ Use `images/blackhole.png` and the newer `images/blackhole2.png` as visual direc
 
 - The black hole has a procedurally generated, angled (`-17°`) wide, eye-shaped luminous accretion disc (reference `images/accretion_disc.png`):
   - Extends out horizontally to over $4\times$ the event horizon radius in an elongated eye/almond profile, tapering into slender tips at the left and right edges where it diminishes in brightness and density.
-  - A living, dynamic white-hot band crosses directly in front of the pitch-black event horizon silhouette.
+  - Dynamic front crossing with zero static lines: the pitch-black event horizon silhouette is unmarred by static baked lines; all front crossing is rendered dynamically by the spinning plasma clouds.
   - Features an organic circular cloudy light ring directly surrounding the event horizon, extending outward by ~1/3 of the black hole radius ($r \approx 1.0 \dots 1.34 R_h$), fading smoothly in brightness and density with multi-frequency turbulent smoke texture and zero artificial edge cutoff.
   - Features a razor-thin circular photon ring right at the photon sphere with sub-pixel Hermite anti-aliasing.
-  - Rendered as a single unified **spinning cloud of light** (1,400+ volumetric plasma puffs) with multi-frequency spiral eddies and organic Gaussian density falloff (zero vector lines), matching the texture and palette of the circular light halo and ejection jets.
+  - Rendered as a single unified **spinning cloud of light** (1,400+ volumetric plasma puffs) with additive blending (`GL_SRC_ALPHA, GL_ONE`), multi-frequency spiral eddies, and organic Gaussian density falloff (zero vector lines), matching the texture of the circular light halo and ejection jets.
+  - High-luminance white gamma: the inner disc blazes **3x brighter** with pure diamond/platinum white light, transitioning smoothly through radiant champagne gold in the mid-disc to warm amber/orange at the outer rim.
   - Differential rotation: spins **3x faster on the inside** ($\omega \approx 7.4\text{ rad/s}$ near the horizon, matching infalling celestial bodies) and smoothly gradients out to $\omega \approx 0.36\text{ rad/s}$ at the outer rim.
   - Direct timescale coupling: disc rotation is synchronized with simulation physics (`simTime`), scaling dynamically from `0.1x` to `10.0x` and freezing on pause. Infalling celestial bodies experience near-horizon viscous coupling/drag to match the inner disc speed.
 - Continuous progressive bipolar relativistic plasma jetstreams along the rotational poles (reference `images/blackhole_ejection.png`):

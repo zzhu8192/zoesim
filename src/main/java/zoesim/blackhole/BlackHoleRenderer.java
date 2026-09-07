@@ -2,6 +2,7 @@ package zoesim.blackhole;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -88,7 +89,9 @@ public final class BlackHoleRenderer {
 
         // 2. Sprites: Back accretion clouds, 3D rotating bodies, black hole sprite, front clouds, and jetstream
         batch.begin();
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         drawAccretionClouds(batch, world, horizon, false, simTime);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         for (CosmicParticle particle : world.getCosmicParticles()) {
             if (particle.position.z <= 0f) {
@@ -101,7 +104,9 @@ public final class BlackHoleRenderer {
                 size, size, 1f, 1f, BlackHolePhysics.ACCRETION_DISK_ANGLE, 0, 0,
                 blackHoleSprite.getWidth(), blackHoleSprite.getHeight(), false, false);
 
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE);
         drawAccretionClouds(batch, world, horizon, true, simTime);
+        batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
 
         for (CosmicParticle particle : world.getCosmicParticles()) {
             if (particle.position.z > 0f) {
@@ -417,28 +422,28 @@ public final class BlackHoleRenderer {
             float pulse = 0.88f + 0.12f * MathUtils.sin(simTime * puff.pulseFreq + puff.pulsePhase);
             float alpha = MathUtils.clamp(puff.baseAlpha * pulse, 0.05f, 1.0f);
 
-            // Color gradient matching images/accretion_disc.png and the circular light ring:
-            // 1. Inner disc & front crossing: Blazing white-hot cream / platinum
-            // 2. Mid disc: Luminous champagne gold & warm ivory
-            // 3. Outer edge: Smoky bronze / muted topaz, less dense and fading
+            // Color gradient:
+            // 1. Inner disc & front crossing: 3x brighter, blazing diamond/platinum white
+            // 2. Mid disc: Radiant ivory to warm champagne gold
+            // 3. Outer edge: Glowing warm amber/orange and smoky bronze
             float red, green, blue;
-            if (frontCrossing || puff.normDist < 0.18f) {
+            if (frontCrossing || puff.normDist < 0.28f) {
                 red = 1.0f;
-                green = frontCrossing ? 0.99f : 0.95f;
-                blue = frontCrossing ? 0.96f : 0.88f;
-                alpha = Math.min(0.98f, alpha * (frontCrossing ? 1.55f : 1.20f));
-            } else if (puff.normDist < 0.62f) {
-                float t = (puff.normDist - 0.18f) / 0.44f;
+                green = frontCrossing ? 1.0f : 0.99f;
+                blue = frontCrossing ? 1.0f : 0.97f;
+                alpha = Math.min(1.0f, alpha * (frontCrossing ? 1.95f : 1.55f));
+            } else if (puff.normDist < 0.65f) {
+                float t = (puff.normDist - 0.28f) / 0.37f;
                 red = 1.0f;
-                green = MathUtils.lerp(0.93f, 0.74f, t);
-                blue = MathUtils.lerp(0.82f, 0.46f, t);
-                alpha = alpha * MathUtils.lerp(1.05f, 0.78f, t);
+                green = MathUtils.lerp(0.98f, 0.82f, t);
+                blue = MathUtils.lerp(0.94f, 0.52f, t);
+                alpha = alpha * MathUtils.lerp(1.35f, 0.85f, t);
             } else {
-                float t = (puff.normDist - 0.62f) / 0.38f;
-                red = MathUtils.lerp(0.95f, 0.72f, t);
-                green = MathUtils.lerp(0.72f, 0.46f, t);
-                blue = MathUtils.lerp(0.46f, 0.22f, t);
-                alpha = alpha * MathUtils.lerp(0.70f, 0.18f, t);
+                float t = (puff.normDist - 0.65f) / 0.35f;
+                red = MathUtils.lerp(1.0f, 0.88f, t);
+                green = MathUtils.lerp(0.80f, 0.46f, t);
+                blue = MathUtils.lerp(0.50f, 0.16f, t);
+                alpha = alpha * MathUtils.lerp(0.75f, 0.18f, t);
             }
 
             // Volumetric puff radius scales with horizon, distance, and baseSize
@@ -527,15 +532,7 @@ public final class BlackHoleRenderer {
                     eyeDisc = diskGlow * edgeDensity * doppler;
                 }
 
-                // 2. Luminous front band foundation across the front of the black hole
-                float dopplerFront = MathUtils.clamp(0.56f - dx / 560f, 0.25f, 1f);
-                float frontBand = (float)Math.exp(-(dy * dy) / (2f * 6.5f * 6.5f))
-                        * (float)Math.exp(-(dx * dx) / (2f * 320f * 320f)) * 0.95f;
-                float frontCore = (float)Math.exp(-(dy * dy) / (2f * 2.5f * 2.5f))
-                        * (float)Math.exp(-(dx * dx) / (2f * 250f * 250f)) * 1.55f;
-                float foreground = (frontBand + frontCore) * dopplerFront;
-
-                // 3. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
+                // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
                 // Extent of radius is ~1/3 of the black hole radius (extends from 121.0f to ~162.0f, smoothly fading to 0)
                 float circularHalo = 0f;
                 if (radius >= 121.0f && radius <= 162.0f) {
@@ -549,38 +546,38 @@ public final class BlackHoleRenderer {
                     circularHalo = (float)Math.exp(-clampedNorm * clampedNorm * 3.0f) * (1f - clampedNorm) * 1.55f;
                 }
 
-                // 4. Razor-thin circular photon ring right at the photon sphere
+                // 3. Razor-thin circular photon ring right at the photon sphere
                 float photonRing = (float)Math.exp(-Math.pow(radius - 124.0f, 2) / (2f * 2.4f * 2.4f)) * 1.85f;
 
-                // 5. Shadow masking for background emission
+                // 4. Shadow masking for background emission
                 float shadowMask = MathUtils.clamp((radius - 120.0f) / 4.0f, 0f, 1f);
                 float backgroundLight = (eyeDisc + circularHalo) * shadowMask;
-                float totalEmission = backgroundLight + foreground + photonRing;
+                float totalEmission = backgroundLight + photonRing;
 
-                // 6. Sub-pixel anti-aliased event horizon silhouette with smooth Hermite blending
+                // 5. Sub-pixel anti-aliased event horizon silhouette with smooth Hermite blending
                 // Compute continuous transition weight [0, 1]: 0 = deep black core, 1 = exterior emission
                 float edgeT = MathUtils.clamp((radius - (R_h - aaBand)) / (2f * aaBand), 0f, 1f);
                 float exteriorWeight = edgeT * edgeT * (3f - 2f * edgeT); // Cubic Hermite smoothstep (C1 continuous)
 
-                // Exterior color mapping matching images/accretion_disc.png
+                // Exterior color mapping: luminous diamond white at inner boundary, warm champagne/amber outward
                 float extR, extG, extB, extA;
                 if (totalEmission > 0.72f) {
                     float w = Math.min(1f, (totalEmission - 0.72f) / 0.72f);
                     extR = 1f;
-                    extG = Math.min(1f, 0.90f + w * 0.10f);
-                    extB = Math.min(1f, 0.75f + w * 0.25f);
-                    extA = Math.min(0.99f, 0.88f + w * 0.11f);
+                    extG = Math.min(1f, 0.96f + w * 0.04f);
+                    extB = Math.min(1f, 0.92f + w * 0.08f);
+                    extA = Math.min(0.99f, 0.90f + w * 0.09f);
                 } else if (totalEmission > 0.22f) {
                     float t = (totalEmission - 0.22f) / 0.50f;
-                    extR = Math.min(1f, 0.85f + t * 0.15f);
-                    extG = 0.55f + t * 0.35f;
-                    extB = 0.25f + t * 0.50f;
-                    extA = 0.45f + t * 0.43f;
+                    extR = 1f;
+                    extG = Math.min(1f, 0.80f + t * 0.16f);
+                    extB = Math.min(1f, 0.60f + t * 0.32f);
+                    extA = 0.45f + t * 0.45f;
                 } else {
                     float t = totalEmission / 0.22f;
-                    extR = 0.78f * t;
-                    extG = 0.45f * t;
-                    extB = 0.20f * t;
+                    extR = 0.85f * t;
+                    extG = 0.55f * t;
+                    extB = 0.30f * t;
                     extA = MathUtils.clamp(t * 0.45f, 0f, 1f);
                 }
 
@@ -592,15 +589,6 @@ public final class BlackHoleRenderer {
                 float outG = MathUtils.lerp(holeG, extG, exteriorWeight);
                 float outB = MathUtils.lerp(holeB, extB, exteriorWeight);
                 float outA = MathUtils.lerp(holeA, extA, exteriorWeight);
-
-                // If foreground white band cuts across the front of the black hole, composite it cleanly
-                if (foreground > 0.035f && radius < R_h) {
-                    float fgFactor = Math.min(1f, foreground * 0.82f);
-                    outR = MathUtils.lerp(outR, extR, fgFactor);
-                    outG = MathUtils.lerp(outG, extG, fgFactor);
-                    outB = MathUtils.lerp(outB, extB, fgFactor);
-                    outA = Math.max(outA, extA);
-                }
 
                 map.setColor(MathUtils.clamp(outR, 0f, 1f),
                              MathUtils.clamp(outG, 0f, 1f),
