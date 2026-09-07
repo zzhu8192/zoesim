@@ -83,10 +83,12 @@ Show a black hole consuming an ongoing supply of celestial objects. This is not 
 
 ### Visual reference
 
-Use `images/blackhole.png` as the visual direction:
+Use `images/blackhole.png` and the newer `images/blackhole2.png` as visual direction. The renderer remains procedural; neither image is drawn into the simulation.
 
 - Predominantly black event horizon.
-- Bright, hot, tilted accretion disk with white, warm gold, orange, and restrained blue/gray light.
+- Bright, hot, tilted accretion disk with a natural elliptical perspective, pale white/rose light, and restrained warm/cool variation.
+- Retain a thin photon ring at the horizon boundary; avoid straight equatorial beams, static concentric outlines, and generic purple/blue boundary circles.
+- Use a soft halo, turbulent moving knots, and background-star lensing to suggest strong gravity without claiming a general-relativity render.
 - The visual should not resemble a purple glowing circle or a generic rainbow vortex.
 
 ### Celestial objects
@@ -95,26 +97,32 @@ Use `images/blackhole.png` as the visual direction:
 - Use a varied natural/celestial palette: rocky browns, ice blues, muted gas-giant golds, off-white stars, and rusty asteroid tones.
 - Objects must vary noticeably in size and visual treatment/shape.
 - Larger objects have larger mass. In the current model mass is proportional to cross-sectional area (`radius²`).
-- Objects must stay inside the circular arena until absorbed.
+- Object state is three-dimensional (`x`, `y`, `z` position and velocity). The arena is the orthographic screen projection of that volume: a positive depth object renders in front of the horizon and a negative depth object renders behind it.
+- Objects remain within the spherical simulation boundary until absorbed; their projected positions remain inside the circular arena.
 
 ### Physics and growth
 
-- Use a Newtonian inverse-square gravitational field:
-  - `a = μ / r²`, where `μ = G × blackHoleMass`.
-  - A small softening radius is acceptable for numerical stability near the center.
-- Spawn objects at sub-orbital speeds with a small inward component so they are bound and can accrete.
+- Use a Newtonian inverse-square gravitational field in three dimensions:
+  - `a = μ / r²`, where `μ = G × blackHoleMass`, `G = 220`, and `r² = dx² + dy² + dz²`.
+  - Acceleration uses a squared softening floor of `900` (a 30-unit softening length) for numerical stability near the center.
+- Start at a black-hole mass of `2200`. The visual event-horizon radius is `34 + 0.68 × sqrt(mass)`.
+- Spawn objects on random three-dimensional orbital planes at 53–79% of circular-orbit speed, plus a 7–23 unit inward component. This produces inclined, decaying elliptical trajectories rather than one flat orbit plane.
+- Limit velocity to 340 units per second and apply light velocity damping to keep continuous accretion stable.
 - Each absorbed object increases black-hole mass by that object’s mass.
+- Absorb an object when its three-dimensional center reaches `eventHorizon + max(1, 0.72 × objectSize)`.
 - The event-horizon radius must grow as a monotonic function of black-hole mass.
 - A larger horizon also changes the gravity term through the increased mass.
 - The black hole must visibly grow in proportion to consumed objects, especially after large objects.
-- Continue populating the arena while the horizon is smaller than the arena.
-- End the simulation only when the event horizon fills the arena; display an explicit end-state message.
+- Seed 180 objects by default; the UI clamps the seed setting to 10–360.
+- Continue introducing one object every 0.045 simulation seconds while fewer than 900 objects are active and the horizon is smaller than the arena.
+- End the simulation when `eventHorizon >= arenaRadius - 10`; display an explicit end-state message.
 
 ### Accretion disk and jets
 
-- The black hole has an angled, bright accretion disk around a dark central horizon.
+- The black hole has a procedurally generated, angled (`-17°`) turbulent accretion disk around a dark central horizon. The disk keeps its original elliptical perspective while using the pale white/rose spectrum and photon ring described above.
 - Add periodic bipolar plasma jets along the rotational poles (above and below the disk axis):
-  - Eject short-lived blue-white particles outward from opposite poles.
+  - Eject short-lived particles from opposite poles approximately perpendicular to the disk, with a concentrated core and a small angular scatter.
+  - Use a false-color synchrotron-style gradient from warmer lower-energy edges through cyan/blue toward a bright core. It is a visualization convention, not a literal claim about visible gamma rays.
   - This is a visual model of relativistic jets; it need not claim a fully relativistic general-relativity simulation.
 
 ### Audio
@@ -142,10 +150,11 @@ Use `images/blackhole.png` as the visual direction:
 - `src/main/java/zoesim/SimulationMenu.java` — menu rendering and selection.
 - `src/main/resources/sounds/` — CC0 audio assets and licenses.
 - `images/a.jpg`, `images/b.jpg` — original RPS reference photos.
-- `images/blackhole.png` — black-hole/accretion-disk visual reference.
+- `images/blackhole.png`, `images/blackhole2.png` — black-hole/accretion-disk visual references.
 
 ## Follow-up quality bar
 
 - Prefer credible visual physics and clear affordances over decorative effects.
+- Keep physics and rendering documentation synchronized with the constants and behavior in `BlackHoleSimulation.java` whenever they change.
 - Do not reintroduce generic colored-dot score markers or unsupported Unicode glyphs in the default bitmap font (use ASCII `-` for minus).
 - Preserve the menu-first workflow and source modularity whenever adding simulations.
