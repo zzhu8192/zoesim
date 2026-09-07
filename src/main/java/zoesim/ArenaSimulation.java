@@ -6,7 +6,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 
 /** Lifecycle boundary between the shared application shell and an individual simulation. */
-interface ArenaSimulation {
+public interface ArenaSimulation {
     void enter(float arenaX, float arenaY, float arenaRadius);
     void resize(float arenaX, float arenaY, float arenaRadius);
     void update(float delta);

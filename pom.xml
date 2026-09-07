@@ -8,23 +8,16 @@
     <artifactId>rps-arena</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>RPS Arena :: Java / Scala / libGDX</name>
+    <name>RPS Arena :: Java / libGDX</name>
 
     <description>
-        A real-time Rock, Paper, Scissors arena simulation built with Java on libGDX.
-        Scala 2.13 is retained as an optional source language for future simulation rules and tests.
+        A real-time Rock, Paper, Scissors and Black Hole arena simulation built with pure Java on libGDX.
     </description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java-version>17</java-version>
-
-        <!-- scala related -->
-        <scala-maven-plugin-version>4.9.2</scala-maven-plugin-version>
-        <scala-major-version>2</scala-major-version>
-        <scala-minor-version>13</scala-minor-version>
-        <scala-patch-version>17</scala-patch-version>
 
         <!--
           libGDX. The desktop natives (gdx-platform natives-desktop) cover Windows/Linux/macOS on
@@ -35,8 +28,6 @@
         <gdx-version>1.13.5</gdx-version>
 
         <!-- test related -->
-        <scala-test-version>3.2.19</scala-test-version>
-        <scala-test-plus-version>3.2.2.0</scala-test-plus-version>
         <junit-version>4.13.2</junit-version>
 
         <!-- maven related -->
@@ -78,13 +69,6 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- Scala: compile scope (unlike a Spark job, nothing provides it at runtime) -->
-        <dependency>
-            <groupId>org.scala-lang</groupId>
-            <artifactId>scala-library</artifactId>
-            <version>${scala-major-version}.${scala-minor-version}.${scala-patch-version}</version>
-        </dependency>
-
         <!-- libGDX core + desktop backend + natives -->
         <dependency>
             <groupId>com.badlogicgames.gdx</groupId>
@@ -104,19 +88,7 @@
             <artifactId>gdx-lwjgl3-angle</artifactId>
         </dependency>
 
-        <!-- Test: ScalaTest suites annotated @RunWith(classOf[JUnitRunner]) so surefire runs them -->
-        <dependency>
-            <groupId>org.scalatest</groupId>
-            <artifactId>scalatest_${scala-major-version}.${scala-minor-version}</artifactId>
-            <version>${scala-test-version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.scalatestplus</groupId>
-            <artifactId>junit-4-12_${scala-major-version}.${scala-minor-version}</artifactId>
-            <version>${scala-test-plus-version}</version>
-            <scope>test</scope>
-        </dependency>
+        <!-- Test: JUnit 4 -->
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -127,51 +99,6 @@
 
     <build>
         <plugins>
-            <!--
-              Hybrid compile order: scalac is bound to process-resources / process-test-resources,
-              the phases just before compile / test-compile, so it always runs before javac. It
-              compiles src/main/scala and parses src/main/java for signatures, so Scala and Java may
-              reference each other; maven-compiler-plugin then emits the Java class files.
-            -->
-            <plugin>
-                <groupId>net.alchim31.maven</groupId>
-                <artifactId>scala-maven-plugin</artifactId>
-                <version>${scala-maven-plugin-version}</version>
-                <executions>
-                    <execution>
-                        <id>scala-compile</id>
-                        <phase>process-resources</phase>
-                        <goals>
-                            <goal>compile</goal>
-                        </goals>
-                    </execution>
-                    <execution>
-                        <id>scala-test-compile</id>
-                        <phase>process-test-resources</phase>
-                        <goals>
-                            <goal>testCompile</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <recompileMode>incremental</recompileMode>
-                    <scalaVersion>${scala-major-version}.${scala-minor-version}.${scala-patch-version}</scalaVersion>
-                    <scalaCompatVersion>${scala-major-version}.${scala-minor-version}</scalaCompatVersion>
-                    <args>
-                        <arg>-deprecation</arg>
-                        <arg>-feature</arg>
-                        <arg>-release</arg>
-                        <arg>${java-version}</arg>
-                    </args>
-                    <fork>true</fork>
-                    <jvmArgs>
-                        <jvmArg>-Xms512m</jvmArg>
-                        <jvmArg>-Xmx2048m</jvmArg>
-                        <jvmArg>-Xss16m</jvmArg>
-                    </jvmArgs>
-                </configuration>
-            </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -188,8 +115,6 @@
                     <argLine>${test.jvm.args}</argLine>
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
-                    <!-- Surefire rewrites a .java include to .class, which is how the Scala
-                         suites (ScalaTest via @RunWith(JUnitRunner)) get picked up. -->
                     <includes>
                         <include>**/*Test.java</include>
                     </includes>

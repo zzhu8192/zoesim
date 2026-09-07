@@ -2,6 +2,7 @@ package zoesim;
 
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import zoesim.blackhole.BlackHoleSimulation;
 
 /** Desktop entry point for the Rock / Paper / Scissors arena. */
 public final class DesktopLauncher {

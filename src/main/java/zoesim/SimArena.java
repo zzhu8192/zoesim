@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
+import zoesim.blackhole.BlackHoleSimulation;
 
 /** Shared application shell: window lifecycle, menu selection, layout, and simulation dispatch. */
 public final class SimArena extends ApplicationAdapter {
