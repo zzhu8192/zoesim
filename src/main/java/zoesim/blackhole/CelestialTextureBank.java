@@ -408,24 +408,21 @@ public final class CelestialTextureBank {
                         + MathUtils.sin(angle * 7f - dist * 0.075f) * 0.020f;
                 float uTurb = MathUtils.clamp(u + turb, 0f, 1f);
 
-                // Layer 1: Inner foggy bulb (visible at ~2x-2.5x black hole radius, corresponding to uTurb < 0.40)
-                // Frosted glowing incandescent aura
-                float innerBulb = (float)Math.exp(-uTurb * uTurb / (2f * 0.17f * 0.17f)) * 0.55f;
-
-                // Layer 2: Outer diffuse foggy shroud extending to the full width of the accretion disc
-                // Gradients out to a much softer layer of lower brightness without hard edges
-                float outerShroud = (float)Math.exp(-uTurb * uTurb / (2f * 0.48f * 0.48f)) * (1f - uTurb) * 0.22f;
-
-                float totalAlpha = MathUtils.clamp(innerBulb + outerShroud, 0f, 1f);
+                // Smoothly blended dual-scale atmospheric luminance (seamless gradienting across inner bulb & outer shroud)
+                float innerBulb = (float)Math.exp(-uTurb * uTurb / (2f * 0.25f * 0.25f)) * 0.38f;
+                float outerShroud = (float)Math.exp(-uTurb * uTurb / (2f * 0.54f * 0.54f)) * 0.20f;
+                float totalAlpha = (innerBulb + outerShroud) * (1f - uTurb * uTurb);
                 if (totalAlpha < 0.002f) continue;
 
-                // Color blend: luminous warm champagne/white in inner bulb, shifting to warm smoky bronze in outer shroud
-                float innerWeight = innerBulb / Math.max(0.001f, totalAlpha);
-                float red = MathUtils.lerp(0.92f, 1.0f, innerWeight);
-                float green = MathUtils.lerp(0.68f, 0.96f, innerWeight);
-                float blue = MathUtils.lerp(0.42f, 0.88f, innerWeight);
+                // Continuous Hermite smoothstep color gradient from champagne-white core to smoky bronze outer shroud
+                // Completely eliminates step boundaries or knee artifacts
+                float t = MathUtils.clamp((uTurb - 0.06f) / 0.58f, 0f, 1f);
+                float smoothT = t * t * (3f - 2f * t); // Cubic Hermite curve
+                float red = MathUtils.lerp(1.0f, 0.90f, smoothT);
+                float green = MathUtils.lerp(0.96f, 0.65f, smoothT);
+                float blue = MathUtils.lerp(0.88f, 0.38f, smoothT);
 
-                map.setColor(red, green, blue, totalAlpha);
+                map.setColor(red, green, blue, MathUtils.clamp(totalAlpha, 0f, 1f));
                 map.drawPixel(x, y);
             }
         }
@@ -465,8 +462,8 @@ public final class CelestialTextureBank {
                 float envelope = (1f - distSq) * (1f - distSq);
                 float cloudDensity = MathUtils.clamp(envelope * (0.85f + billowNoise * 0.65f), 0f, 1f);
 
-                // Soft smoky translucent alpha
-                float alpha = MathUtils.clamp(cloudDensity * 0.70f, 0f, 1f);
+                // Soft smoky translucent alpha (dialed down for subtle, delicate cosmic dust)
+                float alpha = MathUtils.clamp(cloudDensity * 0.48f, 0f, 1f);
 
                 // Cloudy dark grey/brown nebula colors matching images/accretion_disc.png:
                 // Warm smoky umber/sepia at denser centers, fading to cool smoky slate/charcoal at wispy edges

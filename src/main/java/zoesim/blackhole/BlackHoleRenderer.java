@@ -613,16 +613,16 @@ public final class BlackHoleRenderer {
                 }
 
                 // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
-                // Distinct top/bottom asymmetry: top lensed canopy is significantly thicker (reaches ~230px, span 109px),
-                // while bottom arch is noticeably more compact and hugs closer to the horizon (reaches ~162px, span 41px).
+                // Distinct top/bottom asymmetry: top lensed canopy is significantly thicker (reaches ~203px, span 82px),
+                // while bottom arch is noticeably more compact and hugs closer to the horizon (reaches ~152px, span 31px).
                 // Note: In Pixmap coordinates, row y=0 is the TOP of the texture (dy < 0), which renders as SCREEN TOP.
                 float circularHalo = 0f;
                 float screenPolar = radius > 1f ? -dy / radius : 0f; // Positive for screen top, negative for screen bottom
                 float rOut;
                 if (screenPolar >= 0f) {
-                    rOut = 188.0f + 42.0f * (float)Math.pow(screenPolar, 1.15f);
+                    rOut = 171.0f + 32.0f * (float)Math.pow(screenPolar, 1.15f);
                 } else {
-                    rOut = 188.0f - 26.0f * (float)Math.pow(-screenPolar, 1.15f);
+                    rOut = 171.0f - 19.0f * (float)Math.pow(-screenPolar, 1.15f);
                 }
                 if (radius >= 121.0f && radius <= rOut) {
                     float haloNorm = (radius - 121.0f) / (rOut - 121.0f); // [0, 1] across asymmetric span
@@ -632,17 +632,17 @@ public final class BlackHoleRenderer {
 
                     // Imperfect radial wobble (angular perturbation making concentric striations organic rather than sterile)
                     float angleWobble = isTop
-                            ? (MathUtils.sin(angle * 3f + 1.2f) * 2.8f + MathUtils.cos(angle * 5f - 0.7f) * 1.8f)
-                            : (MathUtils.sin(angle * 4f + 2.8f) * 1.5f + MathUtils.cos(angle * 2f + 1.1f) * 1.2f);
+                            ? (MathUtils.sin(angle * 3f + 1.2f) * 2.4f + MathUtils.cos(angle * 5f - 0.7f) * 1.5f)
+                            : (MathUtils.sin(angle * 4f + 2.8f) * 1.3f + MathUtils.cos(angle * 2f + 1.1f) * 1.0f);
                     float rPerturbed = radius + angleWobble;
 
                     // Imperfect concentric striation ripples embedded directly in the halo body (asymmetric frequencies/phases)
                     float striation1 = isTop
-                            ? MathUtils.sin(rPerturbed * 0.28f + 1.1f) * 0.18f
-                            : MathUtils.sin(rPerturbed * 0.45f + 3.4f) * 0.15f;
+                            ? MathUtils.sin(rPerturbed * 0.35f + 1.1f) * 0.18f
+                            : MathUtils.sin(rPerturbed * 0.52f + 3.4f) * 0.15f;
                     float striation2 = isTop
-                            ? MathUtils.sin(rPerturbed * 0.50f - 2.3f) * 0.12f
-                            : MathUtils.sin(rPerturbed * 0.85f - 0.9f) * 0.09f;
+                            ? MathUtils.sin(rPerturbed * 0.62f - 2.3f) * 0.12f
+                            : MathUtils.sin(rPerturbed * 0.98f - 0.9f) * 0.09f;
                     float striations = striation1 + striation2;
 
                     // Multi-octave organic cloudy blemishes (patchy gaseous density variations across angle and radius)
@@ -651,11 +651,11 @@ public final class BlackHoleRenderer {
                     float blemish3 = MathUtils.cos(angle * (isTop ? 12f : 10f) + radius * 0.14f);
                     float cloudNoise = (blemish1 * 0.45f + blemish2 * 0.35f + blemish3 * 0.20f);
 
-                    // Secondary subtle lensed crest nestled within outer halo (scaled to respective arch spans)
-                    float crestR = isTop ? 182.0f : 148.0f;
-                    float crestWidth = isTop ? 8.5f : 4.5f;
+                    // Secondary subtle lensed crest nestled within outer halo (scaled to reduced 25% tighter arch spans)
+                    float crestR = isTop ? 168.0f : 140.0f;
+                    float crestWidth = isTop ? 6.5f : 3.5f;
                     float haloCrest = (float)Math.exp(-Math.pow(rPerturbed - crestR, 2) / (2f * crestWidth * crestWidth))
-                            * (isTop ? 0.40f : 0.22f) * (0.85f + 0.15f * blemish1);
+                            * (isTop ? 0.38f : 0.20f) * (0.85f + 0.15f * blemish1);
 
                     // Blemish modulation weighting: inner rim near horizon remains solid brilliant white core plateau,
                     // while mid and outer halo display the rich organic striations and blemishes
@@ -817,30 +817,20 @@ public final class BlackHoleRenderer {
     }
 
     private static final ForegroundNebulaPuff[] NEBULA_PUFFS = new ForegroundNebulaPuff[] {
-        // --- Lower-Left Nebula Clump (overlapping lower-left horizon & bottom halo) ---
-        // 1. Directly overlapping the lower-left edge of the black hole horizon & bottom halo
-        new ForegroundNebulaPuff(-0.54f, -0.70f, 1.55f, 1.08f, -2f, 0.22f, 1.04f, 0.96f, 0.88f, 0.84f),
-        // 2. Overlapping the bottom-left halo ring
-        new ForegroundNebulaPuff(-0.36f, -0.96f, 1.35f, 0.92f, 3f, -0.18f, 0.96f, 0.92f, 0.90f, 0.80f),
-        // 3. Spanning lower-left space beneath accretion disc
-        new ForegroundNebulaPuff(-0.95f, -0.80f, 1.70f, 1.15f, -4f, 0.16f, 1.08f, 0.98f, 0.88f, 0.76f),
-        // 4. Deep lower-left under-hang
-        new ForegroundNebulaPuff(-0.72f, -1.22f, 1.45f, 1.00f, 2f, 0.20f, 1.00f, 0.92f, 0.85f, 0.70f),
-        // 5. Outer wispy trail toward left edge
-        new ForegroundNebulaPuff(-1.42f, -0.92f, 1.55f, 0.95f, -5f, -0.14f, 0.92f, 0.92f, 0.95f, 0.62f),
-        // 6. Far outer left haze
-        new ForegroundNebulaPuff(-1.85f, -1.10f, 1.35f, 0.85f, -2f, 0.18f, 0.88f, 0.88f, 0.92f, 0.48f),
+        // --- Lower-Left Nebula Clump (delicate subtle dust overlapping lower-left horizon & bottom halo) ---
+        // 1. Overlapping lower-left edge of black hole horizon & bottom halo
+        new ForegroundNebulaPuff(-0.50f, -0.66f, 1.15f, 0.82f, -2f, 0.22f, 1.04f, 0.96f, 0.88f, 0.44f),
+        // 2. Overlapping bottom-left halo ring
+        new ForegroundNebulaPuff(-0.35f, -0.92f, 1.05f, 0.72f, 3f, -0.18f, 0.96f, 0.92f, 0.90f, 0.38f),
+        // 3. Subtle outer dust wisp beneath left accretion disc
+        new ForegroundNebulaPuff(-0.90f, -0.78f, 1.25f, 0.85f, -4f, 0.16f, 1.06f, 0.96f, 0.88f, 0.34f),
 
-        // --- Lower-Right Nebula Clump (overlapping lower-right horizon & bottom halo) ---
-        // 7. Directly overlapping the lower-right edge of the black hole horizon & bottom halo
-        new ForegroundNebulaPuff(0.50f, -0.68f, 1.45f, 1.00f, 3f, -0.20f, 1.02f, 0.96f, 0.88f, 0.82f),
-        // 8. Overlapping the bottom-right halo ring
-        new ForegroundNebulaPuff(0.34f, -0.94f, 1.25f, 0.88f, -2f, 0.16f, 0.95f, 0.92f, 0.90f, 0.76f),
-        // 9. Spanning lower-right space beneath accretion disc
-        new ForegroundNebulaPuff(0.92f, -0.78f, 1.58f, 1.08f, 4f, -0.15f, 1.06f, 0.96f, 0.86f, 0.72f),
-        // 10. Outer wispy trail toward right edge
-        new ForegroundNebulaPuff(1.38f, -0.96f, 1.40f, 0.92f, 2f, 0.18f, 0.94f, 0.90f, 0.92f, 0.58f),
-        // 11. Far outer right haze
-        new ForegroundNebulaPuff(1.78f, -1.10f, 1.25f, 0.80f, -1f, -0.16f, 0.90f, 0.88f, 0.90f, 0.45f)
+        // --- Lower-Right Nebula Clump (delicate subtle dust overlapping lower-right horizon & bottom halo) ---
+        // 4. Overlapping lower-right edge of black hole horizon & bottom halo
+        new ForegroundNebulaPuff(0.48f, -0.65f, 1.10f, 0.78f, 3f, -0.20f, 1.02f, 0.96f, 0.88f, 0.42f),
+        // 5. Overlapping bottom-right halo ring
+        new ForegroundNebulaPuff(0.33f, -0.90f, 1.00f, 0.70f, -2f, 0.16f, 0.95f, 0.92f, 0.90f, 0.36f),
+        // 6. Subtle outer dust wisp beneath right accretion disc
+        new ForegroundNebulaPuff(0.88f, -0.76f, 1.20f, 0.80f, 4f, -0.15f, 1.04f, 0.96f, 0.86f, 0.32f)
     };
 }
