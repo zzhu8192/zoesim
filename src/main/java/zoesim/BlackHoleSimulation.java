@@ -12,6 +12,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.Array;
 
 import java.util.Iterator;
@@ -35,15 +36,15 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     };
 
     private static final class CosmicParticle {
-        final Vector2 position = new Vector2();
-        final Vector2 velocity = new Vector2();
+        final Vector3 position = new Vector3();
+        final Vector3 velocity = new Vector3();
         final float hue, size, mass, spin;
         final int bodyType;
         final Color color;
         float age, wobble;
-        CosmicParticle(float x, float y, float vx, float vy, float hue, float size, float massScale,
-                       int bodyType, Color color, float spin) {
-            position.set(x, y); velocity.set(vx, vy); this.hue = hue; this.size = size;
+        CosmicParticle(float x, float y, float z, float vx, float vy, float vz, float hue, float size,
+                       float massScale, int bodyType, Color color, float spin) {
+            position.set(x, y, z); velocity.set(vx, vy, vz); this.hue = hue; this.size = size;
             mass = particleMass(size) * massScale;
             this.bodyType = bodyType; this.color = color; this.spin = spin;
         }
@@ -143,6 +144,11 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         return .5f * (source + (float)Math.sqrt(source * source + 4f * lens * lens));
     }
 
+    static float spatialDistanceSquared(float dx, float dy, float dz) { return dx * dx + dy * dy + dz * dz; }
+    static float projectedBodyScale(float depth, float arenaRadius) {
+        return MathUtils.clamp(1f + depth / (Math.max(1f, arenaRadius) * 3.5f), .74f, 1.26f);
+    }
+
     static boolean fillsField(float mass, float arenaRadius) { return eventHorizon(mass) >= arenaRadius - 10f; }
     static int clampSeedCount(int count) { return MathUtils.clamp(count, 10, 360); }
 
@@ -172,26 +178,29 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         for (Iterator<CosmicParticle> it = cosmicParticles.iterator(); it.hasNext();) {
             CosmicParticle particle = it.next();
             float dx = arenaX - particle.position.x, dy = arenaY - particle.position.y;
-            float distanceSquared = dx * dx + dy * dy;
+            float dz = -particle.position.z;
+            float distanceSquared = spatialDistanceSquared(dx, dy, dz);
             float distance = (float)Math.sqrt(distanceSquared);
             float disruptionRadius = horizon + Math.max(1f, particle.size * .72f);
             if (distance < disruptionRadius) { absorb(particle); it.remove(); continue; }
             float gravity = gravitationalAcceleration(mass, distanceSquared, 900f);
-            particle.velocity.add(dx / distance * gravity * simulationDt, dy / distance * gravity * simulationDt);
+            particle.velocity.add(dx / distance * gravity * simulationDt,
+                    dy / distance * gravity * simulationDt, dz / distance * gravity * simulationDt);
             particle.velocity.scl(Math.max(.92f, 1f - simulationDt * .018f));
             particle.velocity.limit(340f);
             particle.position.mulAdd(particle.velocity, simulationDt);
             particle.age += simulationDt;
             particle.wobble += particle.spin * simulationDt;
-            dx = particle.position.x - arenaX; dy = particle.position.y - arenaY;
-            distance = (float)Math.sqrt(dx * dx + dy * dy);
+            dx = particle.position.x - arenaX; dy = particle.position.y - arenaY; dz = particle.position.z;
+            distance = (float)Math.sqrt(spatialDistanceSquared(dx, dy, dz));
             if (distance < disruptionRadius) { absorb(particle); it.remove(); continue; }
             float boundary = arenaRadius - particle.size - 5f;
             if (distance > boundary) {
-                float nx = dx / distance, ny = dy / distance;
-                particle.position.set(arenaX + nx * boundary, arenaY + ny * boundary);
-                float outward = particle.velocity.x * nx + particle.velocity.y * ny;
-                if (outward > 0) particle.velocity.mulAdd(new Vector2(nx, ny), -1.75f * outward);
+                float nx = dx / distance, ny = dy / distance, nz = dz / distance;
+                particle.position.set(arenaX + nx * boundary, arenaY + ny * boundary, nz * boundary);
+                float outward = particle.velocity.x * nx + particle.velocity.y * ny + particle.velocity.z * nz;
+                if (outward > 0) particle.velocity.add(-1.75f * outward * nx,
+                        -1.75f * outward * ny, -1.75f * outward * nz);
                 particle.velocity.scl(.92f);
             }
         }
@@ -240,12 +249,26 @@ public final class BlackHoleSimulation implements ArenaSimulation {
                 : innerRadius + (float)Math.sqrt(random.nextFloat()) * Math.max(1f, outerRadius - innerRadius);
         float orbital = (float)Math.sqrt(gravitationalParameter(mass) / radius) * (.53f + random.nextFloat() * .26f);
         float inward = -7f - random.nextFloat() * 16f;
-        float x = arenaX + MathUtils.cos(angle) * radius, y = arenaY + MathUtils.sin(angle) * radius;
-        float vx = MathUtils.cos(angle + MathUtils.HALF_PI) * orbital + MathUtils.cos(angle) * inward;
-        float vy = MathUtils.sin(angle + MathUtils.HALF_PI) * orbital + MathUtils.sin(angle) * inward;
+        float radialZ = random.nextFloat() * 2f - 1f;
+        float radialPlanar = (float)Math.sqrt(Math.max(0f, 1f - radialZ * radialZ));
+        float radialX = MathUtils.cos(angle) * radialPlanar, radialY = MathUtils.sin(angle) * radialPlanar;
+        float tangentX = -MathUtils.sin(angle);
+        float tangentY = MathUtils.cos(angle);
+        float secondaryX = -radialZ * tangentY;
+        float secondaryY = radialZ * tangentX;
+        float secondaryZ = radialPlanar;
+        float planeTwist = random.nextFloat() * MathUtils.PI2;
+        float twistCos = MathUtils.cos(planeTwist), twistSin = MathUtils.sin(planeTwist);
+        float orbitX = tangentX * twistCos + secondaryX * twistSin;
+        float orbitY = tangentY * twistCos + secondaryY * twistSin;
+        float orbitZ = secondaryZ * twistSin;
+        float x = arenaX + radialX * radius, y = arenaY + radialY * radius, z = radialZ * radius;
+        float vx = orbitX * orbital + radialX * inward;
+        float vy = orbitY * orbital + radialY * inward;
+        float vz = orbitZ * orbital + radialZ * inward;
         float spin = (.65f + random.nextFloat() * 3.2f) * (random.nextBoolean() ? 1f : -1f);
-        cosmicParticles.add(new CosmicParticle(x, y, vx, vy, random.nextFloat() * 360f, size, massScale,
-                type, CELESTIAL_PALETTE[type], spin));
+        cosmicParticles.add(new CosmicParticle(x, y, z, vx, vy, vz, random.nextFloat() * 360f,
+                size, massScale, type, CELESTIAL_PALETTE[type], spin));
     }
 
     private void emitJets(float horizon) {
@@ -293,7 +316,7 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         drawStarField();
         drawJetBeams(horizon());
         drawAccretionLights(horizon(), false);
-        for (CosmicParticle particle : cosmicParticles) drawCelestialBody(particle);
+        for (CosmicParticle particle : cosmicParticles) if (particle.position.z <= 0f) drawCelestialBody(particle);
         drawJetParticles();
         shapes.end();
         batch.begin();
@@ -305,6 +328,7 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         batch.end();
         shapes.begin(ShapeRenderer.ShapeType.Filled);
         drawAccretionLights(horizon, true);
+        for (CosmicParticle particle : cosmicParticles) if (particle.position.z > 0f) drawCelestialBody(particle);
         drawAbsorptionFlares(horizon);
         shapes.end();
         if (fieldConsumed) {
@@ -386,9 +410,9 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     private void drawAccretionLights(float horizon, boolean front) {
         float rotation = ACCRETION_DISK_ANGLE * MathUtils.degreesToRadians;
         float cosRotation = MathUtils.cos(rotation), sinRotation = MathUtils.sin(rotation);
-        for (int lane = 0; lane < 5; lane++) {
-            int knotCount = 28 + lane * 8;
-            float orbit = horizon * (1.17f + lane * .19f), flatten = .16f + lane * .022f;
+        for (int lane = 0; lane < 4; lane++) {
+            int knotCount = 25 + lane * 7;
+            float orbit = horizon * (1.21f + lane * .20f), flatten = .21f + lane * .025f;
             for (int i = 0; i < knotCount; i++) {
                 float randomness = randomUnit(i + lane * 101);
                 float orbitSpeed = .78f + randomUnit(i * 7 + lane * 307) * .58f - lane * .08f;
@@ -408,14 +432,7 @@ public final class BlackHoleSimulation implements ArenaSimulation {
                 for (int trail = trailPoints - 1; trail >= 0; trail--) {
                     float trailPhase = phase - trail * (.018f + knot * .010f);
                     float trailX = MathUtils.cos(trailPhase) * orbit * radialNoise;
-                    float phaseSine = MathUtils.sin(trailPhase);
-                    float trailY = phaseSine * orbit * flatten * radialNoise;
-                    if (!front) {
-                        // Light from the far side is bent into the high arch seen above the shadow.
-                        float lensLift = horizon * (.34f + lane * .025f)
-                                * (float)Math.pow(Math.max(0f, phaseSine), .58f);
-                        trailY += lensLift;
-                    }
+                    float trailY = MathUtils.sin(trailPhase) * orbit * flatten * radialNoise;
                     float x = arenaX + trailX * cosRotation - trailY * sinRotation;
                     float y = arenaY + trailX * sinRotation + trailY * cosRotation;
                     float trailFade = 1f - trail / (float)(trailPoints + 1);
@@ -423,10 +440,10 @@ public final class BlackHoleSimulation implements ArenaSimulation {
                     float green = .60f + temperature * .39f;
                     float blue = .52f + temperature * temperature * .47f;
                     shapes.setColor(red, green, blue, alpha * trailFade * .16f);
-                    shapes.circle(x, y, 1.0f + knot * 1.75f, 10);
+                    shapes.circle(x, y, .85f + knot * 1.45f, 10);
                     shapes.setColor(1f, Math.min(1f, green + .12f), Math.min(1f, blue + .18f),
                             alpha * trailFade);
-                    shapes.circle(x, y, .20f + knot * .54f, 8);
+                    shapes.circle(x, y, .18f + knot * .48f, 8);
                 }
             }
         }
@@ -500,7 +517,8 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     private void drawCelestialBody(CosmicParticle particle) {
         float shimmer = .82f + .18f * MathUtils.sin(particle.age * 3f + particle.hue);
         Color color = particle.color;
-        float x = particle.position.x, y = particle.position.y, size = particle.size;
+        float x = particle.position.x, y = particle.position.y;
+        float size = particle.size * projectedBodyScale(particle.position.z, arenaRadius);
         if (particle.bodyType == 5) {
             float breathe = .92f + .10f * MathUtils.sin(particle.age * .72f + particle.hue);
             for (int i = 7; i >= 0; i--) {
@@ -516,7 +534,9 @@ public final class BlackHoleSimulation implements ArenaSimulation {
             return;
         }
         if (particle.bodyType == 6) {
-            float inverseSpeed = 1f / Math.max(1f, particle.velocity.len());
+            float planarSpeed = (float)Math.sqrt(particle.velocity.x * particle.velocity.x
+                    + particle.velocity.y * particle.velocity.y);
+            float inverseSpeed = 1f / Math.max(1f, planarSpeed);
             float tailX = x - particle.velocity.x * inverseSpeed * size * 5.8f;
             float tailY = y - particle.velocity.y * inverseSpeed * size * 5.8f;
             shapes.setColor(.32f, .68f, 1f, shimmer * .11f); shapes.rectLine(tailX, tailY, x, y, size * 2.1f);
@@ -691,58 +711,33 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
             float dx = x - center, dy = y - center;
             float radius = (float)Math.sqrt(dx * dx + dy * dy);
-            if (radius > 191f) continue;
-
-            // A thin, optically bright disk viewed almost edge-on.
-            float flattenedY = dy * 3.45f;
+            if (radius > 187f) continue;
+            float flattenedY = dy * 2.62f;
             float diskRadius = (float)Math.sqrt(dx * dx + flattenedY * flattenedY);
             float azimuth = MathUtils.atan2(flattenedY, dx);
-            float innerDisk = gaussian(diskRadius, 88f, 7f);
-            float hotDisk = gaussian(diskRadius, 108f, 18f);
-            float outerDisk = gaussian(diskRadius, 145f, 38f) * .48f;
-            float turbulence = .72f + .13f * MathUtils.sin(azimuth * 17f + diskRadius * .36f)
-                    + .09f * MathUtils.sin(azimuth * 29f - diskRadius * .19f)
-                    + .06f * MathUtils.sin(dx * .23f + dy * .41f);
-            float disk = Math.max(0f, (innerDisk + hotDisk + outerDisk) * turbulence);
-
-            // The far side of the disk is gravitationally lensed into two broad arches.
-            float normalizedX = Math.min(1f, Math.abs(dx) / 119f);
-            float arcHeight = 17f + 63f * (float)Math.sqrt(Math.max(0f, 1f - normalizedX * normalizedX));
-            float arc = gaussian(Math.abs(dy), arcHeight, 8.5f)
-                    * gaussian(Math.abs(dx), 51f, 82f);
-            float arcFilaments = .76f + .15f * MathUtils.sin(radius * .43f + azimuth * 13f)
-                    + .09f * MathUtils.sin(radius * .19f - azimuth * 23f);
-            arc = Math.max(0f, arc * arcFilaments);
-
-            float horizontalEnvelope = gaussian(Math.abs(dx), 76f, 112f);
-            float equatorialBloom = gaussian(dy, 0f, 9.5f) * horizontalEnvelope;
-            float equatorialCore = gaussian(dy, 0f, 1.65f) * horizontalEnvelope;
+            float innerDisk = gaussian(diskRadius, 91f, 7.5f);
+            float hotEdge = gaussian(diskRadius, 105f, 13f);
+            float outerDisk = gaussian(diskRadius, 132f, 28f) * .46f;
+            float turbulence = .72f + .15f * MathUtils.sin(azimuth * 19f + diskRadius * .39f)
+                    + .10f * MathUtils.sin(azimuth * 31f - diskRadius * .16f);
+            float disk = Math.max(0f, (innerDisk + hotEdge + outerDisk) * turbulence);
+            float heat = MathUtils.clamp(1.32f - diskRadius / 155f, .08f, 1f);
+            float approaching = MathUtils.clamp(.48f - dx / 235f, .18f, 1f);
+            float lensing = gaussian(radius, 76f, 4.5f) * (.48f + Math.max(0f, -dy / 95f) * .42f);
             float photonRing = gaussian(radius, 72f, 1.45f);
-            float halo = gaussian(radius, 102f, 64f) * .14f;
-            float wideRoseGlow = gaussian(radius, 132f, 76f) * .045f;
-            float approaching = MathUtils.clamp(.74f - dx / 360f, .48f, 1f);
-
-            boolean inShadow = radius < 69.5f;
-            float visibleDisk = inShadow ? 0f : disk * approaching;
-            float visibleArc = inShadow ? 0f : arc;
-            float visiblePhotonRing = inShadow && radius < 68f ? 0f : photonRing;
-            // The front edge of the disk crosses the silhouette as a razor-thin white band.
-            float foregroundBand = equatorialCore * (.72f + .28f * approaching);
-
-            float emission = visibleDisk + visibleArc * .92f + foregroundBand * 1.7f;
-            float red = emission * 1.08f + equatorialBloom * .31f + visiblePhotonRing * 1.04f
-                    + halo * .82f + wideRoseGlow;
-            float green = emission * .91f + equatorialBloom * .24f + visiblePhotonRing * .93f
-                    + halo * .58f + wideRoseGlow * .66f;
-            float blue = emission * .94f + equatorialBloom * .29f + visiblePhotonRing * .97f
-                    + halo * .69f + wideRoseGlow * .82f;
-            float alpha = MathUtils.clamp(emission * .88f + equatorialBloom * .30f
-                    + visiblePhotonRing * .92f + halo + wideRoseGlow, 0f, .995f);
-
-            if (inShadow && foregroundBand < .035f) {
-                float shadowEdge = MathUtils.clamp((69.5f - radius) / 2.5f, 0f, 1f);
-                map.setColor(.0001f, .00012f, .0002f, .95f + shadowEdge * .05f);
+            float dustGlow = gaussian(radius, 133f, 47f) * .055f;
+            if (radius < 70.5f) {
+                float edge = MathUtils.clamp((70.5f - radius) / 3f, 0f, 1f);
+                map.setColor(.0002f, .00025f, .0005f, .94f + edge * .06f);
             } else {
+                float energy = disk * (.48f + approaching * .75f);
+                float red = energy * (1f + heat * .08f) + lensing * .96f + photonRing + dustGlow * .72f;
+                float green = energy * (.60f + heat * .36f) + lensing * .84f + photonRing * .94f
+                        + dustGlow * .50f;
+                float blue = energy * (.52f + heat * heat * .43f) + lensing * .88f + photonRing * .98f
+                        + dustGlow * .61f;
+                float alpha = MathUtils.clamp(disk * .88f + lensing * .72f + photonRing * .94f + dustGlow,
+                        0f, .99f);
                 map.setColor(Math.min(1f, red), Math.min(1f, green), Math.min(1f, blue), alpha);
             }
             map.drawPixel(x, y);

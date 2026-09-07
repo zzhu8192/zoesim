@@ -38,6 +38,18 @@ public class BlackHoleSimulationTest {
         assertTrue(BlackHoleSimulation.lensedImageRadius(40f, 20f) > 40f);
     }
 
+    @Test public void spatialDistanceIncludesDepth() {
+        assertEquals(169f, BlackHoleSimulation.spatialDistanceSquared(3f, 4f, 12f), .0001f);
+        assertTrue(BlackHoleSimulation.spatialDistanceSquared(3f, 4f, 12f)
+                > BlackHoleSimulation.spatialDistanceSquared(3f, 4f, 0f));
+    }
+
+    @Test public void projectedBodiesConveyFrontAndBackDepth() {
+        assertEquals(1f, BlackHoleSimulation.projectedBodyScale(0f, 300f), .0001f);
+        assertTrue(BlackHoleSimulation.projectedBodyScale(100f, 300f) > 1f);
+        assertTrue(BlackHoleSimulation.projectedBodyScale(-100f, 300f) < 1f);
+    }
+
     @Test public void fieldCompletionAndSeedBoundsAreDeterministic() {
         assertFalse(BlackHoleSimulation.fillsField(BlackHoleSimulation.INITIAL_MASS, 350f));
         float requiredMass = (float)Math.pow((350f - 10f - 34f) / .68f, 2);
