@@ -271,48 +271,58 @@ public final class RpsSimulation implements ArenaSimulation {
         float panelX = arenaX + arenaRadius + 42f;
         float width = Gdx.graphics.getWidth() - panelX - 32f;
         float H = Gdx.graphics.getHeight();
+
+        float panelBottom = 68f;
+        float panelTop = H - 48f;
+        float headerY = panelTop - 18f;
+        float subtitleY = panelTop - 58f;
+        float separatorY = panelTop - 82f;
+
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(.035f, .08f, .17f, .92f); shapes.rect(panelX, 76, width, H - 152);
-        shapes.setColor(.12f, .42f, .67f, .72f); shapes.rect(panelX, H - 132, width, 2);
+        shapes.setColor(.035f, .08f, .17f, .92f); shapes.rect(panelX, panelBottom, width, panelTop - panelBottom);
+        shapes.setColor(.12f, .42f, .67f, .72f); shapes.rect(panelX, separatorY, width, 2);
         if (editingKind != null) {
-            float editRow = H - 361 - editingKind.ordinal() * 38f;
-            shapes.setColor(.10f, .33f, .53f, 1f); shapes.rect(panelX + 88, editRow - 27, 60, 36);
+            float editRow = panelTop - 275f - editingKind.ordinal() * 34f;
+            shapes.setColor(.10f, .33f, .53f, 1f); shapes.rect(panelX + 88, editRow - 22, 60, 30);
         }
         shapes.end();
         batch.begin();
-        font.setColor(.72f, .92f, 1f, 1f); font.getData().setScale(1.75f); text(font, batch, "RPS ARENA", panelX + 22, H - 76);
-        font.getData().setScale(0.88f); font.setColor(.5f, .68f, .84f, 1f); text(font, batch, "LAST TYPE STANDING WINS", panelX + 23, H - 114);
-        font.getData().setScale(1.15f);
-        float row = H - 175;
+        font.setColor(.72f, .92f, 1f, 1f); font.getData().setScale(1.35f); text(font, batch, "RPS ARENA", panelX + 22, headerY);
+        font.getData().setScale(0.64f); font.setColor(.5f, .68f, .84f, 1f); text(font, batch, "LAST TYPE STANDING WINS", panelX + 23, subtitleY);
+        font.getData().setScale(0.92f);
+        float row = panelTop - 112f;
         for (Kind kind : Kind.values()) {
             drawCounterSprite(kind, panelX + 31, row - 6, batch);
             font.setColor(Color.WHITE); text(font, batch, kind.label, panelX + 58, row);
             text(font, batch, String.valueOf(count(kind)), panelX + width - 56, row);
-            row -= 48;
+            row -= 40;
         }
-        font.getData().setScale(0.84f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "CONFIGURE STARTING COUNT", panelX + 22, row - 8);
-        row -= 44;
+        font.getData().setScale(0.68f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "CONFIGURE STARTING COUNT", panelX + 22, row - 6);
+        row -= 36;
         for (Kind kind : Kind.values()) {
             font.setColor(Color.WHITE);
-            font.getData().setScale(1.00f);
+            font.getData().setScale(0.85f);
             text(font, batch, kind.label.substring(0, 1), panelX + 22, row);
             text(font, batch, "-", panelX + 58, row);
             text(font, batch, editingKind == kind ? (editingValue.isEmpty() ? "|" : editingValue + "|") : String.valueOf(start.get(kind)), panelX + 105, row);
             text(font, batch, "+", panelX + 175, row);
-            row -= 38;
+            row -= 34;
         }
-        font.getData().setScale(0.88f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "MOTION SPEED  " + String.format("%.1fx", speed), panelX + 22, row - 2);
+        font.getData().setScale(0.72f); font.setColor(.52f, .7f, .86f, 1f); text(font, batch, "MOTION SPEED  " + String.format("%.1fx", speed), panelX + 22, row - 2);
         batch.end();
         float sliderY = row - 24;
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(.09f, .23f, .39f, 1f); shapes.rect(panelX + 23, sliderY, width - 46, 9);
-        shapes.setColor(.14f, .8f, 1f, 1f); shapes.rect(panelX + 23, sliderY, (width - 46) * ((speed - .35f) / 2.15f), 9);
-        shapes.circle(panelX + 23 + (width - 46) * ((speed - .35f) / 2.15f), sliderY + 4.5f, 13);
+        shapes.setColor(.09f, .23f, .39f, 1f); shapes.rect(panelX + 23, sliderY, width - 46, 8);
+        shapes.setColor(.14f, .8f, 1f, 1f); shapes.rect(panelX + 23, sliderY, (width - 46) * ((speed - .35f) / 2.15f), 8);
+        shapes.circle(panelX + 23 + (width - 46) * ((speed - .35f) / 2.15f), sliderY + 4f, 12);
         shapes.end();
         batch.begin();
-        font.getData().setScale(0.96f); font.setColor(Color.WHITE); text(font, batch, paused ? "▶  RESUME" : "Ⅱ  PAUSE", panelX + 24, sliderY - 38); text(font, batch, "↻  RESET", panelX + 185, sliderY - 38);
-        font.setColor(.82f, .62f, 1f, 1f); font.getData().setScale(0.95f); text(font, batch, "SIMULATION MENU", panelX + 24, 154);
-        font.setColor(.45f, .7f, .9f, 1f); font.getData().setScale(0.78f); text(font, batch, "PIECES " + pieces.size + "   •   CLASHES " + collisions, panelX + 24, 112);
+        float buttonY = sliderY - 36f;
+        float menuBtnY = panelBottom + 62f;
+        float taglineY = menuBtnY - 32f;
+        font.getData().setScale(0.80f); font.setColor(Color.WHITE); text(font, batch, paused ? "▶  RESUME" : "Ⅱ  PAUSE", panelX + 24, buttonY); text(font, batch, "↻  RESET", panelX + Math.max(170f, width * 0.48f), buttonY);
+        font.setColor(.82f, .62f, 1f, 1f); font.getData().setScale(0.80f); text(font, batch, "SIMULATION MENU", panelX + 24, menuBtnY);
+        font.setColor(.45f, .7f, .9f, 1f); font.getData().setScale(0.60f); text(font, batch, "PIECES " + pieces.size + "   •   CLASHES " + collisions, panelX + 24, taglineY);
         batch.end();
     }
 
@@ -397,7 +407,14 @@ public final class RpsSimulation implements ArenaSimulation {
     }
 
     private int count(Kind kind) { int total = 0; for (Piece piece : pieces) if (piece.kind == kind) total++; return total; }
-    private static void text(BitmapFont font, SpriteBatch batch, String value, float x, float y) { font.draw(batch, value, x, y); }
+    private static void text(BitmapFont font, SpriteBatch batch, String value, float x, float y) {
+        Color cur = font.getColor();
+        float r = cur.r, g = cur.g, b = cur.b, a = cur.a;
+        font.setColor(0f, 0.01f, 0.03f, a * 0.72f);
+        font.draw(batch, value, x + 1.8f, y - 1.8f);
+        font.setColor(r, g, b, a);
+        font.draw(batch, value, x, y);
+    }
 
     private Texture createRockSprite() {
         Pixmap map = transparentPixmap(112, 112);

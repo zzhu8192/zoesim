@@ -25,12 +25,12 @@ public final class SimulationMenu {
         shapes.end();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
-        font.setColor(.82f, .94f, 1f, 1f); font.getData().setScale(1.85f); centered(font, batch, "SIMULATION LAB", width * .5f, height * .82f);
-        font.setColor(.52f, .69f, .86f, 1f); font.getData().setScale(0.92f); centered(font, batch, "CHOOSE A SIMULATION", width * .5f, height * .765f);
-        font.setColor(.65f, .92f, 1f, 1f); font.getData().setScale(1.25f); centered(font, batch, "ROCK / PAPER / SCISSORS", width * .5f, rpsY + 84);
-        font.setColor(.57f, .72f, .84f, 1f); font.getData().setScale(0.82f); centered(font, batch, "SELF-REPLICATING BATTLE ARENA", width * .5f, rpsY + 44);
-        font.setColor(1f, .82f, .57f, 1f); font.getData().setScale(1.25f); centered(font, batch, "BLACK HOLE", width * .5f, blackHoleY + 84);
-        font.setColor(.55f, .72f, .84f, 1f); font.getData().setScale(0.82f); centered(font, batch, "STELLAR ACCRETION AND RELATIVISTIC JETS", width * .5f, blackHoleY + 44);
+        font.setColor(.82f, .94f, 1f, 1f); font.getData().setScale(1.50f); centered(font, batch, "SIMULATION LAB", width * .5f, height * .82f);
+        font.setColor(.52f, .69f, .86f, 1f); font.getData().setScale(0.75f); centered(font, batch, "CHOOSE A SIMULATION", width * .5f, height * .765f);
+        font.setColor(.65f, .92f, 1f, 1f); font.getData().setScale(1.08f); centered(font, batch, "ROCK / PAPER / SCISSORS", width * .5f, rpsY + 86);
+        font.setColor(.57f, .72f, .84f, 1f); font.getData().setScale(0.68f); centered(font, batch, "SELF-REPLICATING BATTLE ARENA", width * .5f, rpsY + 44);
+        font.setColor(1f, .82f, .57f, 1f); font.getData().setScale(1.08f); centered(font, batch, "BLACK HOLE", width * .5f, blackHoleY + 86);
+        font.setColor(.55f, .72f, .84f, 1f); font.getData().setScale(0.68f); centered(font, batch, "STELLAR ACCRETION AND RELATIVISTIC JETS", width * .5f, blackHoleY + 44);
         font.getData().setScale(1.0f);
         batch.end();
         if (!Gdx.input.justTouched()) return Choice.NONE;
@@ -47,8 +47,13 @@ public final class SimulationMenu {
     }
 
     private static void centered(BitmapFont font, SpriteBatch batch, String text, float x, float y) {
-        float width = font.getRegion().getRegionWidth() * 0; // keeps this helper allocation-free aside from GlyphLayout-free approximation below
         com.badlogic.gdx.graphics.g2d.GlyphLayout layout = new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, text);
-        font.draw(batch, text, x - layout.width * .5f, y);
+        float drawX = x - layout.width * .5f;
+        Color cur = font.getColor();
+        float r = cur.r, g = cur.g, b = cur.b, a = cur.a;
+        font.setColor(0f, 0.01f, 0.03f, a * 0.72f);
+        font.draw(batch, text, drawX + 2f, y - 2f);
+        font.setColor(r, g, b, a);
+        font.draw(batch, text, drawX, y);
     }
 }
