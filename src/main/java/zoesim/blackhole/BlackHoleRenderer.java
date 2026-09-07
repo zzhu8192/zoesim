@@ -574,42 +574,61 @@ public final class BlackHoleRenderer {
                 }
 
                 // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
-                // Doubled thickness (span increased from 37px to 74px) with brilliant white inner core plateau
+                // Doubled thickness with brilliant white inner core plateau and imperfect circular blemishes/striations
                 float circularHalo = 0f;
-                if (radius >= 121.0f && radius <= 195.0f) {
-                    float haloNorm = (radius - 121.0f) / 74.0f; // [0, 1] across doubled 74px span
+                float sinPolar = radius > 1f ? dy / radius : 0f;
+                // Natural top/bottom asymmetry in halo extent: top arch extends slightly wider (202px) than bottom arch (186px)
+                float rOut = 194.0f + 8.0f * sinPolar;
+                if (radius >= 121.0f && radius <= rOut) {
+                    float haloNorm = (radius - 121.0f) / (rOut - 121.0f); // [0, 1] across doubled span
                     float angle = MathUtils.atan2(dy, dx);
-                    // Multi-frequency organic turbulence matching jet cloud technique
-                    float turb = MathUtils.sin(angle * 6f + radius * 0.08f) * 0.05f
-                            + MathUtils.sin(angle * 11f - radius * 0.12f) * 0.025f;
-                    float clampedNorm = MathUtils.clamp(haloNorm + turb, 0f, 1f);
-                    // Broad brilliant white core plateau, then smooth Gaussian falloff
-                    float corePlateau = MathUtils.clamp(1f - clampedNorm * 1.5f, 0f, 1f);
-                    circularHalo = corePlateau * 0.70f + (float)Math.exp(-clampedNorm * clampedNorm * 2.2f) * (1f - clampedNorm) * 1.65f;
+                    boolean isTop = dy >= 0f;
+                    float blemishPhase = isTop ? 1.73f : 4.89f;
+
+                    // Imperfect radial wobble (angular perturbation making concentric striations organic rather than sterile)
+                    float angleWobble = isTop
+                            ? (MathUtils.sin(angle * 3f + 1.2f) * 2.4f + MathUtils.cos(angle * 5f - 0.7f) * 1.5f)
+                            : (MathUtils.sin(angle * 4f + 2.8f) * 1.9f + MathUtils.cos(angle * 2f + 1.1f) * 1.7f);
+                    float rPerturbed = radius + angleWobble;
+
+                    // Imperfect concentric striation ripples embedded directly in the halo body (asymmetric frequencies/phases)
+                    float striation1 = isTop
+                            ? MathUtils.sin(rPerturbed * 0.32f + 1.1f) * 0.18f
+                            : MathUtils.sin(rPerturbed * 0.38f + 3.4f) * 0.16f;
+                    float striation2 = isTop
+                            ? MathUtils.sin(rPerturbed * 0.58f - 2.3f) * 0.12f
+                            : MathUtils.sin(rPerturbed * 0.64f - 0.9f) * 0.10f;
+                    float striations = striation1 + striation2;
+
+                    // Multi-octave organic cloudy blemishes (patchy gaseous density variations across angle and radius)
+                    float blemish1 = MathUtils.sin(angle * (isTop ? 5f : 6f) + radius * 0.05f + blemishPhase);
+                    float blemish2 = MathUtils.sin(angle * (isTop ? 8f : 7f) - radius * 0.09f + blemishPhase * 0.6f);
+                    float blemish3 = MathUtils.cos(angle * (isTop ? 12f : 10f) + radius * 0.14f);
+                    float cloudNoise = (blemish1 * 0.45f + blemish2 * 0.35f + blemish3 * 0.20f);
+
+                    // Secondary subtle lensed crest nestled right within the halo flank (closer to the light halo)
+                    float crestR = isTop ? 173.0f : 163.0f;
+                    float crestWidth = isTop ? 7.0f : 5.5f;
+                    float haloCrest = (float)Math.exp(-Math.pow(rPerturbed - crestR, 2) / (2f * crestWidth * crestWidth))
+                            * (isTop ? 0.38f : 0.26f) * (0.85f + 0.15f * blemish1);
+
+                    // Blemish modulation weighting: inner rim near horizon remains solid brilliant white core plateau,
+                    // while mid and outer halo display the rich organic striations and blemishes
+                    float blemishWeight = MathUtils.clamp((haloNorm - 0.12f) / 0.30f, 0f, 1f) * (1f - haloNorm * 0.75f);
+                    float blemishMod = 1.0f + (striations + cloudNoise * 0.22f) * blemishWeight;
+
+                    float corePlateau = MathUtils.clamp(1f - haloNorm * 1.5f, 0f, 1f);
+                    float baseHalo = corePlateau * 0.70f + (float)Math.exp(-haloNorm * haloNorm * 2.2f) * (1f - haloNorm) * 1.65f;
+                    circularHalo = baseHalo * Math.max(0.15f, blemishMod) + haloCrest;
                 }
 
                 // 3. Razor-thin circular photon ring right at the photon sphere
                 float photonRing = (float)Math.exp(-Math.pow(radius - 123.6f, 2) / (2f * 2.6f * 2.6f)) * 2.2f;
 
-                // 4. Disconnected semi-circular ring streaks above and below the disc (gravitationally lensed sub-rings)
-                // Separated from the doubled halo by a clear dark space gap
-                float sinPolar = radius > 1f ? dy / radius : 0f;
-                float topWeight = MathUtils.clamp((sinPolar - 0.18f) / 0.32f, 0f, 1f);
-                topWeight *= topWeight;
-                float bottomWeight = MathUtils.clamp((-sinPolar - 0.18f) / 0.32f, 0f, 1f);
-                bottomWeight *= bottomWeight;
-
-                float upperArc1 = (float)Math.exp(-Math.pow(radius - 215.0f, 2) / (2f * 3.2f * 3.2f)) * 1.25f * topWeight;
-                float upperArc2 = (float)Math.exp(-Math.pow(radius - 239.0f, 2) / (2f * 2.6f * 2.6f)) * 0.80f * topWeight;
-                float lowerArc1 = (float)Math.exp(-Math.pow(radius - 213.0f, 2) / (2f * 3.0f * 3.0f)) * 1.10f * bottomWeight;
-                float lowerArc2 = (float)Math.exp(-Math.pow(radius - 233.0f, 2) / (2f * 2.4f * 2.4f)) * 0.65f * bottomWeight;
-                float lensedArcs = (upperArc1 + upperArc2 + lowerArc1 + lowerArc2)
-                        * (0.88f + 0.12f * MathUtils.sin(MathUtils.atan2(dy, dx) * 7f + radius * 0.18f));
-
-                // 5. Shadow masking for background emission
+                // 4. Shadow masking for background emission
                 float shadowMask = MathUtils.clamp((radius - 120.0f) / 4.0f, 0f, 1f);
                 float backgroundLight = (eyeDisc + circularHalo) * shadowMask;
-                float totalEmission = backgroundLight + photonRing + lensedArcs;
+                float totalEmission = backgroundLight + photonRing;
 
                 // 5. Sub-pixel anti-aliased event horizon silhouette with smooth Hermite blending
                 // Compute continuous transition weight [0, 1]: 0 = deep black core, 1 = exterior emission
