@@ -34,19 +34,20 @@ public final class BlackHoleRenderer {
     private void initAccretionClouds() {
         Random rand = new Random(0x7A4C91E3L);
         for (int i = 0; i < CLOUD_PUFF_COUNT; i++) {
-            // Power 1.95 biases puff distribution strongly toward inner disc for an intensely glowing white core
-            float normDist = (float)Math.pow(rand.nextFloat(), 1.95f);
-            float baseOrbit = 1.08f + normDist * 3.15f;
-            float eccentricity = 0.01f + rand.nextFloat() * 0.10f;
+            // Power 1.25 gives a smooth, gradual distribution across the full extended disc
+            float normDist = (float)Math.pow(rand.nextFloat(), 1.25f);
+            // Elongated by ~50%: baseOrbit now extends from 1.06 to 5.81 (was 1.08 to 4.23)
+            float baseOrbit = 1.06f + normDist * 4.75f;
+            float eccentricity = 0.01f + rand.nextFloat() * 0.09f;
             float periapsis = rand.nextFloat() * MathUtils.PI2;
             // 3D planar tilt & pitch dispersion
-            float planeTilt = (rand.nextFloat() - 0.5f) * 0.09f;
-            float planePitch = (rand.nextFloat() - 0.5f) * 0.06f;
+            float planeTilt = (rand.nextFloat() - 0.5f) * 0.08f;
+            float planePitch = (rand.nextFloat() - 0.5f) * 0.05f;
             float speedMult = 0.94f + rand.nextFloat() * 0.12f;
-            // Size factor: inner puffs are slightly smaller/denser, outer puffs are broader
+            // Size factor: inner puffs are slightly smaller/denser, outer puffs broader
             float baseSize = 0.85f + rand.nextFloat() * 0.35f;
-            // Alpha: dense in inner/mid disc, tapering toward outer edges
-            float baseAlpha = 0.38f + (float)Math.pow(1f - normDist, 1.5f) * 0.55f + rand.nextFloat() * 0.10f;
+            // Gradual, continuous density tapering from inner core to outer tips
+            float baseAlpha = MathUtils.lerp(0.58f, 0.16f, normDist) + rand.nextFloat() * 0.08f;
             float phase = rand.nextFloat() * MathUtils.PI2;
             float spinRate = (rand.nextFloat() - 0.5f) * 3.5f;
             float pulseFreq = 1.2f + rand.nextFloat() * 2.4f;
@@ -390,9 +391,9 @@ public final class BlackHoleRenderer {
             AccretionCloudPuff puff = accretionPuffs[i];
 
             // 3x faster inner spin with smooth differential Keplerian-like gradient:
-            // At inner rim (baseOrbit ~ 1.08): omega ~ 7.4 rad/s (visibly matching infalling celestial bodies!)
-            // At outer rim (baseOrbit ~ 4.20): omega ~ 0.36 rad/s (gradual cosmic drift)
-            float omega = 7.4f * (float)Math.pow(1.10f / Math.max(1.05f, puff.baseOrbit), 2.25f) * puff.speedMult;
+            // At inner rim (baseOrbit ~ 1.06): omega ~ 7.4 rad/s (visibly matching infalling celestial bodies!)
+            // At outer rim (baseOrbit ~ 5.80): omega ~ 0.22 rad/s (gradual cosmic drift)
+            float omega = 7.4f * (float)Math.pow(1.08f / Math.max(1.04f, puff.baseOrbit), 2.25f) * puff.speedMult;
             float headPhase = puff.phase + simTime * omega;
 
             float sinHead = MathUtils.sin(headPhase);
@@ -405,66 +406,79 @@ public final class BlackHoleRenderer {
                     / (1f + puff.eccentricity * MathUtils.cos(headPhase - puff.periapsis));
 
             float lx = r * cosHead;
-            // Vertical thickness: 0.22 at inner disc, aggressively flattening to 0.038 toward outer edges
-            float flatness = MathUtils.lerp(0.22f, 0.038f, (float)Math.pow(puff.normDist, 1.3f));
-            float tiltDamping = (float)Math.pow(1f - puff.normDist * 0.88f, 2.2f);
+            // Vertical thickness: 0.20 at inner disc, aggressively flattening to 0.028 toward outer edges
+            float flatness = MathUtils.lerp(0.20f, 0.028f, (float)Math.pow(puff.normDist, 1.2f));
+            float tiltDamping = (float)Math.pow(1f - puff.normDist * 0.85f, 2.0f);
             float ly = r * sinHead * flatness + r * (puff.planeTilt * sinHead + puff.planePitch * cosHead) * tiltDamping;
 
-            // Aggressive almond / knife-edge tip taper along lx towards outer tips
-            float tipNorm = Math.min(1f, Math.abs(lx) / (horizon * 4.4f));
-            float tipTaper = (float)Math.pow(Math.max(0f, 1f - tipNorm * 0.94f), 1.75f);
-            ly *= (0.05f + 0.95f * tipTaper);
+            // Aggressive almond / knife-edge tip taper along lx towards extended outer tips (6.3 * horizon)
+            float tipNorm = Math.min(1f, Math.abs(lx) / (horizon * 6.3f));
+            float tipTaper = (float)Math.pow(Math.max(0f, 1f - tipNorm * 0.94f), 1.6f);
+            ly *= (0.04f + 0.96f * tipTaper);
 
             float posX = arenaX + lx * cosRotation - ly * sinRotation;
             float posY = arenaY + lx * sinRotation + ly * cosRotation;
 
-            // Front crossing: puffs passing directly across the pitch-black event horizon silhouette
-            boolean frontCrossing = front && Math.abs(lx) < horizon * 1.40f && Math.abs(ly) < horizon * 0.38f;
+            // Tight inner front crossing right across the event horizon silhouette
+            boolean innerFrontCrossing = front && r < horizon * 1.35f && Math.abs(ly) < horizon * 0.25f;
 
             // Dynamic density pulsation & breathing
             float pulse = 0.88f + 0.12f * MathUtils.sin(simTime * puff.pulseFreq + puff.pulsePhase);
-            float alpha = MathUtils.clamp(puff.baseAlpha * pulse, 0.05f, 1.0f);
+            float alpha = MathUtils.clamp(puff.baseAlpha * pulse, 0.04f, 1.0f);
 
-            // Taper density toward outer edges
-            float edgeFade = (float)Math.pow(Math.max(0f, 1f - tipNorm * 0.88f), 1.3f);
+            // Gradual density taper toward outer edges
+            float edgeFade = (float)Math.pow(Math.max(0f, 1f - tipNorm * 0.85f), 1.1f);
             alpha *= edgeFade;
 
-            // Color gradient:
-            // 1. Inner disc & front crossing: EVEN BRIGHTER, almost entirely glowing white (1.0, 1.0, 1.0)
-            // 2. Mid disc: Radiant white/cream transitioning to warm amber-gold
-            // 3. Outer edge: More obvious orange/brownish (smoky copper / burnt amber / terracotta)
+            // Smooth, gradual 4-stage color & gamma gradient distributed across the entire disc:
+            // 1. Inner core (normDist < 0.10, r ~ 1.06 - 1.5 H): Blinding white transitioning to warm cream
+            // 2. Mid-inner (normDist 0.10 - 0.38, r ~ 1.5 - 2.8 H): Radiant gold to glowing amber-orange
+            // 3. Mid-outer (normDist 0.38 - 0.72, r ~ 2.8 - 4.4 H): Distinct reddish-orange / terracotta (visible in front too!)
+            // 4. Outer rim (normDist 0.72 - 1.00, r ~ 4.4 - 5.8 H): Deep smoky reddish-brown / burnt copper
             float red, green, blue;
-            if (frontCrossing || puff.normDist < 0.38f) {
+            if (innerFrontCrossing) {
                 red = 1.0f;
                 green = 1.0f;
                 blue = 1.0f;
-                alpha = Math.min(1.0f, alpha * (frontCrossing ? 2.3f : 1.95f));
-            } else if (puff.normDist < 0.66f) {
-                float t = (puff.normDist - 0.38f) / 0.28f;
+                alpha = Math.min(1.0f, alpha * 1.60f);
+            } else if (puff.normDist < 0.10f) {
+                float t = puff.normDist / 0.10f;
                 red = 1.0f;
-                green = MathUtils.lerp(1.0f, 0.65f, t);
-                blue = MathUtils.lerp(1.0f, 0.22f, t);
-                alpha = alpha * MathUtils.lerp(1.5f, 0.70f, t);
+                green = MathUtils.lerp(1.0f, 0.94f, t);
+                blue = MathUtils.lerp(1.0f, 0.80f, t);
+                alpha *= MathUtils.lerp(1.50f, 1.20f, t);
+            } else if (puff.normDist < 0.38f) {
+                float t = (puff.normDist - 0.10f) / 0.28f;
+                red = 1.0f;
+                green = MathUtils.lerp(0.94f, 0.60f, t);
+                blue = MathUtils.lerp(0.80f, 0.18f, t);
+                alpha *= MathUtils.lerp(1.20f, 0.90f, t);
+            } else if (puff.normDist < 0.72f) {
+                float t = (puff.normDist - 0.38f) / 0.34f;
+                red = MathUtils.lerp(1.0f, 0.88f, t);
+                green = MathUtils.lerp(0.60f, 0.26f, t);  // clearly reddish-orange across front & sides
+                blue = MathUtils.lerp(0.18f, 0.05f, t);
+                alpha *= MathUtils.lerp(0.90f, 0.65f, t);
             } else {
-                float t = (puff.normDist - 0.66f) / 0.34f;
-                red = MathUtils.lerp(0.96f, 0.70f, t);    // burnt ember
-                green = MathUtils.lerp(0.62f, 0.28f, t);  // brownish orange
-                blue = MathUtils.lerp(0.20f, 0.04f, t);   // very low blue -> deep rich brown/amber
-                alpha = alpha * MathUtils.lerp(0.55f, 0.10f, t);
+                float t = (puff.normDist - 0.72f) / 0.28f;
+                red = MathUtils.lerp(0.88f, 0.66f, t);    // deep burnt copper / crimson-brown
+                green = MathUtils.lerp(0.26f, 0.12f, t);  // reddish-brown
+                blue = MathUtils.lerp(0.05f, 0.02f, t);
+                alpha *= MathUtils.lerp(0.65f, 0.35f, t);
             }
 
             // Volumetric puff radius scales with horizon, distance, and baseSize
-            float puffRadius = horizon * (0.20f + puff.normDist * 0.35f) * puff.baseSize;
-            if (frontCrossing) {
-                puffRadius *= 1.25f; // Extra volumetric presence across front band
+            float puffRadius = horizon * (0.18f + puff.normDist * 0.38f) * puff.baseSize;
+            if (innerFrontCrossing) {
+                puffRadius *= 1.15f;
             }
 
             float puffDiam = puffRadius * 2f;
             float diskAngleDeg = BlackHolePhysics.ACCRETION_DISK_ANGLE;
 
-            // Inner puffs are round/volumetric (scaleY = 1.0), outer puffs are flattened laminar streaks (scaleY -> 0.18)
+            // Inner puffs are round/volumetric (scaleY = 1.0), outer puffs are flattened laminar streaks (scaleY -> 0.16)
             float scaleX = 1.0f;
-            float scaleY = MathUtils.lerp(1.0f, 0.18f, (float)Math.pow(puff.normDist, 1.1f));
+            float scaleY = MathUtils.lerp(1.0f, 0.16f, (float)Math.pow(puff.normDist, 1.1f));
 
             batch.setColor(red, green, blue, alpha);
             batch.draw(cloudTex, posX - puffRadius, posY - puffRadius, puffRadius, puffRadius,
@@ -545,21 +559,21 @@ public final class BlackHoleRenderer {
                 }
 
                 // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
-                // Extent of radius is ~40% of the black hole radius with brilliant inner plateau
+                // Extent of radius is tightly hugging the black hole radius with brilliant inner core
                 float circularHalo = 0f;
-                if (radius >= 121.0f && radius <= 172.0f) {
-                    float haloNorm = (radius - 121.0f) / 51.0f; // [0, 1] across halo span
+                if (radius >= 121.0f && radius <= 158.0f) {
+                    float haloNorm = (radius - 121.0f) / 37.0f; // [0, 1] across halo span
                     float angle = MathUtils.atan2(dy, dx);
                     // Multi-frequency organic turbulence matching jet cloud technique
                     float turb = MathUtils.sin(angle * 6f + radius * 0.175f) * 0.06f
                             + MathUtils.sin(angle * 11f - radius * 0.25f) * 0.03f;
                     float clampedNorm = MathUtils.clamp(haloNorm + turb, 0f, 1f);
-                    // Gaussian-like falloff: intense brilliant glowing white near event horizon
-                    circularHalo = (float)Math.exp(-clampedNorm * clampedNorm * 2.4f) * (1f - clampedNorm) * 2.5f;
+                    // Gaussian-like falloff: bright white right at horizon, smoothly blending outward
+                    circularHalo = (float)Math.exp(-clampedNorm * clampedNorm * 2.6f) * (1f - clampedNorm) * 1.85f;
                 }
 
                 // 3. Razor-thin circular photon ring right at the photon sphere
-                float photonRing = (float)Math.exp(-Math.pow(radius - 123.8f, 2) / (2f * 2.8f * 2.8f)) * 2.6f;
+                float photonRing = (float)Math.exp(-Math.pow(radius - 123.6f, 2) / (2f * 2.6f * 2.6f)) * 2.2f;
 
                 // 4. Shadow masking for background emission
                 float shadowMask = MathUtils.clamp((radius - 120.0f) / 4.0f, 0f, 1f);
@@ -571,26 +585,32 @@ public final class BlackHoleRenderer {
                 float edgeT = MathUtils.clamp((radius - (R_h - aaBand)) / (2f * aaBand), 0f, 1f);
                 float exteriorWeight = edgeT * edgeT * (3f - 2f * edgeT); // Cubic Hermite smoothstep (C1 continuous)
 
-                // Exterior color mapping: brilliant pure white at inner boundary, warm amber, orange-brown at tips
+                // Exterior color mapping: white at inner rim, transitioning to amber, reddish-orange, and deep brown
                 float extR, extG, extB, extA;
-                if (totalEmission > 0.45f) {
-                    float w = Math.min(1f, (totalEmission - 0.45f) / 0.8f);
+                if (totalEmission > 0.82f) {
+                    float w = Math.min(1f, (totalEmission - 0.82f) / 0.82f);
                     extR = 1f;
-                    extG = 1f; // Entirely glowing white!
-                    extB = 1f; // Pure white!
-                    extA = Math.min(1.0f, 0.94f + w * 0.06f);
-                } else if (totalEmission > 0.14f) {
-                    float t = (totalEmission - 0.14f) / 0.31f;
+                    extG = 1f; // Blinding white core right at horizon
+                    extB = 1f;
+                    extA = Math.min(1.0f, 0.92f + w * 0.08f);
+                } else if (totalEmission > 0.35f) {
+                    float t = (totalEmission - 0.35f) / 0.47f;
                     extR = 1f;
-                    extG = MathUtils.lerp(0.72f, 1.0f, t);
-                    extB = MathUtils.lerp(0.22f, 1.0f, t);
-                    extA = 0.35f + t * 0.59f;
+                    extG = MathUtils.lerp(0.72f, 0.98f, t);
+                    extB = MathUtils.lerp(0.20f, 0.88f, t);
+                    extA = 0.45f + t * 0.47f;
+                } else if (totalEmission > 0.10f) {
+                    float t = (totalEmission - 0.10f) / 0.25f;
+                    extR = MathUtils.lerp(0.86f, 1.0f, t);
+                    extG = MathUtils.lerp(0.30f, 0.72f, t); // reddish-orange to amber
+                    extB = MathUtils.lerp(0.04f, 0.20f, t);
+                    extA = 0.22f + t * 0.23f;
                 } else {
-                    float t = totalEmission / 0.14f;
-                    extR = MathUtils.lerp(0.68f, 0.88f, t);
-                    extG = MathUtils.lerp(0.30f, 0.50f, t); // orange-brownish tone
-                    extB = MathUtils.lerp(0.06f, 0.14f, t);
-                    extA = MathUtils.clamp(t * 0.30f, 0f, 1f);
+                    float t = totalEmission / 0.10f;
+                    extR = 0.76f * t;
+                    extG = 0.22f * t; // deep reddish-brown
+                    extB = 0.03f * t;
+                    extA = MathUtils.clamp(t * 0.22f, 0f, 1f);
                 }
 
                 // Deep black event horizon core
