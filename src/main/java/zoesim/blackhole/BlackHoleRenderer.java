@@ -575,19 +575,20 @@ public final class BlackHoleRenderer {
 
                 // 2. Organic circular cloudy light ring surrounding the black hole (matching images/accretion_disc.png)
                 // Distinct top/bottom asymmetry: top lensed canopy is significantly thicker (reaches ~230px, span 109px),
-                // while bottom arch is noticeably more compact and hugs closer to the horizon (reaches ~162px, span 41px)
+                // while bottom arch is noticeably more compact and hugs closer to the horizon (reaches ~162px, span 41px).
+                // Note: In Pixmap coordinates, row y=0 is the TOP of the texture (dy < 0), which renders as SCREEN TOP.
                 float circularHalo = 0f;
-                float sinPolar = radius > 1f ? dy / radius : 0f;
+                float screenPolar = radius > 1f ? -dy / radius : 0f; // Positive for screen top, negative for screen bottom
                 float rOut;
-                if (sinPolar >= 0f) {
-                    rOut = 188.0f + 42.0f * (float)Math.pow(sinPolar, 1.15f);
+                if (screenPolar >= 0f) {
+                    rOut = 188.0f + 42.0f * (float)Math.pow(screenPolar, 1.15f);
                 } else {
-                    rOut = 188.0f - 26.0f * (float)Math.pow(-sinPolar, 1.15f);
+                    rOut = 188.0f - 26.0f * (float)Math.pow(-screenPolar, 1.15f);
                 }
                 if (radius >= 121.0f && radius <= rOut) {
                     float haloNorm = (radius - 121.0f) / (rOut - 121.0f); // [0, 1] across asymmetric span
-                    float angle = MathUtils.atan2(dy, dx);
-                    boolean isTop = dy >= 0f;
+                    float angle = MathUtils.atan2(-dy, dx); // Oriented with screen top as positive Y
+                    boolean isTop = dy <= 0f; // Screen top
                     float blemishPhase = isTop ? 1.73f : 4.89f;
 
                     // Imperfect radial wobble (angular perturbation making concentric striations organic rather than sterile)
