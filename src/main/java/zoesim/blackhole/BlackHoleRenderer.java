@@ -817,20 +817,24 @@ public final class BlackHoleRenderer {
     }
 
     private static final ForegroundNebulaPuff[] NEBULA_PUFFS = new ForegroundNebulaPuff[] {
-        // --- Lower-Left Nebula Clump (delicate subtle dust overlapping lower-left horizon & bottom halo) ---
+        // --- Lower-Left Nebula Clump (distinct smoky clouds overlapping lower-left horizon & bottom halo) ---
         // 1. Overlapping lower-left edge of black hole horizon & bottom halo
-        new ForegroundNebulaPuff(-0.50f, -0.66f, 1.15f, 0.82f, -2f, 0.22f, 1.04f, 0.96f, 0.88f, 0.44f),
+        new ForegroundNebulaPuff(-0.52f, -0.68f, 1.40f, 0.98f, -2f, 0.22f, 1.04f, 0.96f, 0.88f, 0.82f),
         // 2. Overlapping bottom-left halo ring
-        new ForegroundNebulaPuff(-0.35f, -0.92f, 1.05f, 0.72f, 3f, -0.18f, 0.96f, 0.92f, 0.90f, 0.38f),
-        // 3. Subtle outer dust wisp beneath left accretion disc
-        new ForegroundNebulaPuff(-0.90f, -0.78f, 1.25f, 0.85f, -4f, 0.16f, 1.06f, 0.96f, 0.88f, 0.34f),
+        new ForegroundNebulaPuff(-0.36f, -0.94f, 1.25f, 0.88f, 3f, -0.18f, 0.96f, 0.92f, 0.90f, 0.78f),
+        // 3. Billowy dust body beneath left accretion disc
+        new ForegroundNebulaPuff(-0.95f, -0.80f, 1.55f, 1.05f, -4f, 0.16f, 1.06f, 0.96f, 0.88f, 0.74f),
+        // 4. Trailing dust wisp toward left
+        new ForegroundNebulaPuff(-1.40f, -0.96f, 1.35f, 0.88f, -2f, -0.14f, 0.92f, 0.92f, 0.95f, 0.60f),
 
-        // --- Lower-Right Nebula Clump (delicate subtle dust overlapping lower-right horizon & bottom halo) ---
-        // 4. Overlapping lower-right edge of black hole horizon & bottom halo
-        new ForegroundNebulaPuff(0.48f, -0.65f, 1.10f, 0.78f, 3f, -0.20f, 1.02f, 0.96f, 0.88f, 0.42f),
-        // 5. Overlapping bottom-right halo ring
-        new ForegroundNebulaPuff(0.33f, -0.90f, 1.00f, 0.70f, -2f, 0.16f, 0.95f, 0.92f, 0.90f, 0.36f),
-        // 6. Subtle outer dust wisp beneath right accretion disc
-        new ForegroundNebulaPuff(0.88f, -0.76f, 1.20f, 0.80f, 4f, -0.15f, 1.04f, 0.96f, 0.86f, 0.32f)
+        // --- Lower-Right Nebula Clump (distinct smoky clouds overlapping lower-right horizon & bottom halo) ---
+        // 5. Overlapping lower-right edge of black hole horizon & bottom halo
+        new ForegroundNebulaPuff(0.48f, -0.66f, 1.35f, 0.92f, 3f, -0.20f, 1.02f, 0.96f, 0.88f, 0.80f),
+        // 6. Overlapping bottom-right halo ring
+        new ForegroundNebulaPuff(0.34f, -0.92f, 1.18f, 0.82f, -2f, 0.16f, 0.95f, 0.92f, 0.90f, 0.75f),
+        // 7. Billowy dust body beneath right accretion disc
+        new ForegroundNebulaPuff(0.92f, -0.78f, 1.45f, 0.98f, 4f, -0.15f, 1.04f, 0.96f, 0.86f, 0.70f),
+        // 8. Trailing dust wisp toward right
+        new ForegroundNebulaPuff(1.36f, -0.96f, 1.30f, 0.82f, 2f, 0.18f, 0.94f, 0.90f, 0.92f, 0.55f)
     };
 }

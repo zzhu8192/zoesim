@@ -462,14 +462,14 @@ public final class CelestialTextureBank {
                 float envelope = (1f - distSq) * (1f - distSq);
                 float cloudDensity = MathUtils.clamp(envelope * (0.85f + billowNoise * 0.65f), 0f, 1f);
 
-                // Soft smoky translucent alpha (dialed down for subtle, delicate cosmic dust)
-                float alpha = MathUtils.clamp(cloudDensity * 0.48f, 0f, 1f);
+                // Distinct, visible smoky translucent alpha
+                float alpha = MathUtils.clamp(cloudDensity * 0.88f, 0f, 1f);
 
                 // Cloudy dark grey/brown nebula colors matching images/accretion_disc.png:
                 // Warm smoky umber/sepia at denser centers, fading to cool smoky slate/charcoal at wispy edges
-                float red = MathUtils.lerp(0.14f, 0.25f, cloudDensity);
-                float green = MathUtils.lerp(0.12f, 0.19f, cloudDensity);
-                float blue = MathUtils.lerp(0.11f, 0.15f, cloudDensity);
+                float red = MathUtils.lerp(0.15f, 0.30f, cloudDensity);
+                float green = MathUtils.lerp(0.12f, 0.22f, cloudDensity);
+                float blue = MathUtils.lerp(0.11f, 0.17f, cloudDensity);
 
                 map.setColor(red, green, blue, alpha);
                 map.drawPixel(x, y);
