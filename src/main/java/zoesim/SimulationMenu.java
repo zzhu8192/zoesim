@@ -28,8 +28,8 @@ public final class SimulationMenu {
         font.setColor(.52f, .69f, .86f, 1f); font.getData().setScale(1.08f); centered(font, batch, "CHOOSE A SIMULATION", width * .5f, height * .755f);
         font.setColor(.65f, .92f, 1f, 1f); font.getData().setScale(1.55f); centered(font, batch, "ROCK / PAPER / SCISSORS", width * .5f, rpsY + 70);
         font.setColor(.57f, .72f, .84f, 1f); font.getData().setScale(1f); centered(font, batch, "SELF-REPLICATING BATTLE ARENA", width * .5f, rpsY + 38);
-        font.setColor(.92f, .73f, 1f, 1f); font.getData().setScale(1.55f); centered(font, batch, "BLACK HOLE", width * .5f, blackHoleY + 70);
-        font.setColor(.70f, .57f, .86f, 1f); font.getData().setScale(1f); centered(font, batch, "RAINBOW PARTICLE ACCRETION", width * .5f, blackHoleY + 38);
+        font.setColor(1f, .82f, .57f, 1f); font.getData().setScale(1.55f); centered(font, batch, "BLACK HOLE", width * .5f, blackHoleY + 70);
+        font.setColor(.55f, .72f, .84f, 1f); font.getData().setScale(1f); centered(font, batch, "STELLAR ACCRETION AND RELATIVISTIC JETS", width * .5f, blackHoleY + 38);
         font.getData().setScale(1.0f);
         batch.end();
         if (!Gdx.input.justTouched()) return Choice.NONE;

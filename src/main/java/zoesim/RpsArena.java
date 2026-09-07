@@ -28,18 +28,22 @@ public final class RpsArena extends ApplicationAdapter {
     private static final float PIECE_RADIUS = 17f;
     private static final float ACCRETION_DISK_ANGLE = -17f;
     private static final float JET_AXIS = (ACCRETION_DISK_ANGLE + 90f) * MathUtils.degreesToRadians;
-    private static final float COSMIC_SPAWN_INTERVAL = .075f;
-    private static final int MAX_COSMIC_PARTICLES = 700;
+    private static final float COSMIC_SPAWN_INTERVAL = .045f;
+    private static final int MAX_COSMIC_PARTICLES = 900;
+    private static final int BACKGROUND_STAR_COUNT = 260;
     private static final Color[] CELESTIAL_PALETTE = {
             new Color(.35f, .26f, .19f, 1f), new Color(.43f, .64f, .78f, 1f),
             new Color(.77f, .56f, .32f, 1f), new Color(.86f, .88f, .91f, 1f),
-            new Color(.48f, .25f, .16f, 1f)
+            new Color(.48f, .25f, .16f, 1f), new Color(.38f, .52f, .61f, 1f),
+            new Color(.67f, .82f, .91f, 1f)
     };
     private final Random random = new Random();
     private final Array<Piece> pieces = new Array<>();
     private final Array<Impact> impacts = new Array<>();
     private final Array<CosmicParticle> cosmicParticles = new Array<>();
     private final Array<JetParticle> jetParticles = new Array<>();
+    private final Array<AbsorptionFlare> absorptionFlares = new Array<>();
+    private final BackgroundStar[] backgroundStars = new BackgroundStar[BACKGROUND_STAR_COUNT];
     private final EnumMap<Kind, Integer> start = new EnumMap<>(Kind.class);
     private ShapeRenderer shapes;
     private SpriteBatch batch;
@@ -138,9 +142,30 @@ public final class RpsArena extends ApplicationAdapter {
         final Color color;
         final float spin;
         float age, wobble;
-        CosmicParticle(float x, float y, float vx, float vy, float hue, float size, int bodyType, Color color, float spin) {
-            position.set(x, y); velocity.set(vx, vy); this.hue = hue; this.size = size; mass = BlackHoleSimulation.particleMass(size);
+        CosmicParticle(float x, float y, float vx, float vy, float hue, float size, float massScale,
+                       int bodyType, Color color, float spin) {
+            position.set(x, y); velocity.set(vx, vy); this.hue = hue; this.size = size;
+            mass = BlackHoleSimulation.particleMass(size) * massScale;
             this.bodyType = bodyType; this.color = color; this.spin = spin;
+        }
+    }
+
+    private static final class BackgroundStar {
+        final float radius, angle, size, brightness, phase, angularMotion, temperature;
+        final int shape;
+        BackgroundStar(float radius, float angle, float size, float brightness, float phase,
+                       float angularMotion, float temperature, int shape) {
+            this.radius = radius; this.angle = angle; this.size = size; this.brightness = brightness;
+            this.phase = phase; this.angularMotion = angularMotion; this.temperature = temperature; this.shape = shape;
+        }
+    }
+
+    private static final class AbsorptionFlare {
+        final float angle, radius, size, life, phase;
+        final Color color;
+        float age;
+        AbsorptionFlare(float angle, float radius, float size, float life, float phase, Color color) {
+            this.angle = angle; this.radius = radius; this.size = size; this.life = life; this.phase = phase; this.color = color;
         }
     }
 
@@ -166,6 +191,7 @@ public final class RpsArena extends ApplicationAdapter {
         rockSprite = createRockSprite();
         paperSprite = createPaperSprite();
         blackHoleSprite = createBlackHoleSprite();
+        createBackgroundStars();
         scissorsSprites = new Texture[] { createScissorsSprite(18), createScissorsSprite(32), createScissorsSprite(46) };
         Gdx.input.setInputProcessor(new InputAdapter() {
             @Override public boolean keyTyped(char character) {
@@ -289,7 +315,8 @@ public final class RpsArena extends ApplicationAdapter {
             float dx = arenaX - particle.position.x, dy = arenaY - particle.position.y;
             float distance2 = dx * dx + dy * dy;
             float distance = (float)Math.sqrt(distance2);
-            if (distance < horizon) { absorb(particle); it.remove(); continue; }
+            float disruptionRadius = horizon + Math.max(1f, particle.size * .72f);
+            if (distance < disruptionRadius) { absorb(particle); it.remove(); continue; }
             // Inverse-square gravity with a small softening radius for numerical stability.
             float gravity = gravitationalParameter / Math.max(distance2, 900f);
             particle.velocity.add(dx / distance * gravity * simulationDt, dy / distance * gravity * simulationDt);
@@ -302,7 +329,7 @@ public final class RpsArena extends ApplicationAdapter {
             dx = particle.position.x - arenaX;
             dy = particle.position.y - arenaY;
             distance = (float)Math.sqrt(dx * dx + dy * dy);
-            if (distance < horizon) { absorb(particle); it.remove(); continue; }
+            if (distance < disruptionRadius) { absorb(particle); it.remove(); continue; }
             float boundary = arenaRadius - particle.size - 5f;
             if (distance > boundary) {
                 float nx = dx / distance, ny = dy / distance;
@@ -318,6 +345,11 @@ public final class RpsArena extends ApplicationAdapter {
             jet.velocity.scl(1f + simulationDt * .08f);
             jet.age += simulationDt;
             if (jet.age > jet.life || jet.position.dst2(arenaX, arenaY) > arenaRadius * arenaRadius) it.remove();
+        }
+        for (Iterator<AbsorptionFlare> it = absorptionFlares.iterator(); it.hasNext();) {
+            AbsorptionFlare flare = it.next();
+            flare.age += simulationDt;
+            if (flare.age > flare.life) it.remove();
         }
         if (blackHoleHorizon() >= arenaRadius - 10f) { fieldConsumed = true; paused = true; stopBlackHoleAmbience(); }
     }
@@ -345,7 +377,8 @@ public final class RpsArena extends ApplicationAdapter {
     }
 
     private void resetBlackHole() {
-        cosmicParticles.clear(); jetParticles.clear(); absorbedParticles = 0; blackHoleMass = BlackHoleSimulation.INITIAL_MASS;
+        cosmicParticles.clear(); jetParticles.clear(); absorptionFlares.clear();
+        absorbedParticles = 0; blackHoleMass = BlackHoleSimulation.INITIAL_MASS;
         nextAbsorbSound = 0f; cosmicSpawnTimer = 0f; jetTimer = 0f; fieldConsumed = false; paused = false;
         for (int i = 0; i < blackHoleStartCount; i++) spawnCosmicParticle(false);
         startBlackHoleAmbience();
@@ -354,22 +387,42 @@ public final class RpsArena extends ApplicationAdapter {
     private void spawnCosmicParticle(boolean atBoundary) {
         float angle = random.nextFloat() * MathUtils.PI2;
         float horizon = blackHoleHorizon();
-        float radius = atBoundary ? arenaRadius - 11f : horizon + 24f + (float)Math.sqrt(random.nextFloat()) * (arenaRadius - horizon - 35f);
+        int roll = random.nextInt(100);
+        int type = roll < 18 ? 0 : roll < 32 ? 1 : roll < 44 ? 2 : roll < 62 ? 3 : roll < 87 ? 4 : roll < 94 ? 5 : 6;
+        float sample = random.nextFloat();
+        float size;
+        float massScale;
+        switch (type) {
+            case 0: size = 3f + sample * sample * 7f; massScale = 1f; break;          // rocky planet
+            case 1: size = 2.5f + sample * 6f; massScale = .82f; break;              // ice world
+            case 2: size = 6f + sample * 9f; massScale = .55f; break;                // gas giant
+            case 3: size = 1.4f + sample * sample * 4f; massScale = 12f; break;       // compact star
+            case 4: size = .8f + sample * sample * 5.5f; massScale = 1.1f; break;     // asteroid
+            case 5: size = 13f + sample * 20f; massScale = .04f; break;              // diffuse nebula
+            default: size = 1.2f + sample * 4f; massScale = .5f; break;               // comet
+        }
+        float outerRadius = arenaRadius - Math.max(8f, size * .72f + 4f);
+        float innerRadius = horizon + Math.max(18f, size * .42f);
+        float radius = atBoundary ? outerRadius : innerRadius + (float)Math.sqrt(random.nextFloat()) * Math.max(1f, outerRadius - innerRadius);
         float orbital = (float)Math.sqrt(BlackHoleSimulation.gravitationalParameter(blackHoleMass) / radius) * (.53f + random.nextFloat() * .26f);
         float inward = -7f - random.nextFloat() * 16f;
         float x = arenaX + MathUtils.cos(angle) * radius, y = arenaY + MathUtils.sin(angle) * radius;
         float vx = MathUtils.cos(angle + MathUtils.HALF_PI) * orbital + MathUtils.cos(angle) * inward;
         float vy = MathUtils.sin(angle + MathUtils.HALF_PI) * orbital + MathUtils.sin(angle) * inward;
-        float size = 1.2f + (float)Math.pow(random.nextFloat(), 2.2f) * 13f;
-        int type = random.nextInt(5);
-        cosmicParticles.add(new CosmicParticle(x, y, vx, vy, random.nextFloat() * 360f, size, type,
-                CELESTIAL_PALETTE[type], 1.5f + random.nextFloat() * 4f));
+        float spin = (.65f + random.nextFloat() * 3.2f) * (random.nextBoolean() ? 1f : -1f);
+        cosmicParticles.add(new CosmicParticle(x, y, vx, vy, random.nextFloat() * 360f, size, massScale,
+                type, CELESTIAL_PALETTE[type], spin));
     }
 
     private void emitJets(float horizon) {
         // The jet axis is perpendicular to the same tilted plane used to render the accretion disk.
-        for (int pole = -1; pole <= 1; pole += 2) for (int i = 0; i < 2; i++) {
-            float spread = (random.nextFloat() - .5f) * .075f;
+        for (int pole = -1; pole <= 1; pole += 2) for (int i = 0; i < 4; i++) {
+            float spread;
+            if (i < 3) {
+                spread = (random.nextFloat() + random.nextFloat() + random.nextFloat() - 1.5f) * .075f;
+            } else {
+                spread = (random.nextBoolean() ? 1f : -1f) * (.065f + random.nextFloat() * .085f);
+            }
             float angle = JET_AXIS + (pole < 0 ? MathUtils.PI : 0f) + spread;
             float radius = horizon * (1.02f + random.nextFloat() * .12f);
             float velocity = 225f + random.nextFloat() * 135f;
@@ -385,6 +438,16 @@ public final class RpsArena extends ApplicationAdapter {
     private void absorb(CosmicParticle particle) {
         blackHoleMass += particle.mass;
         absorbedParticles++;
+        float angle = MathUtils.atan2(particle.position.y - arenaY, particle.position.x - arenaX);
+        float flareSize = particle.bodyType == 5
+                ? MathUtils.clamp(particle.size * .15f, 2f, 4.5f)
+                : particle.bodyType == 2
+                ? MathUtils.clamp(particle.size * .38f, 1.8f, 5.5f)
+                : MathUtils.clamp(particle.size, 1.1f, 6f);
+        absorptionFlares.add(new AbsorptionFlare(angle, blackHoleHorizon() * 1.04f,
+                flareSize, .42f + Math.min(.36f, flareSize * .045f),
+                particle.hue * MathUtils.degreesToRadians, particle.color));
+        if (absorptionFlares.size > 140) absorptionFlares.removeIndex(0);
         if (nextAbsorbSound <= 0f) {
             blackHoleAbsorb.play(.22f, .38f + Math.min(.26f, particle.size * .04f), 0f);
             nextAbsorbSound = .12f;
@@ -451,6 +514,7 @@ public final class RpsArena extends ApplicationAdapter {
         shapes.setColor(.0015f, .003f, .009f, 1f); shapes.circle(arenaX, arenaY, arenaRadius);
         drawStarField();
         drawJetBeams(horizon);
+        drawAccretionLights(horizon, false);
         for (CosmicParticle particle : cosmicParticles) drawCelestialBody(particle);
         for (JetParticle jet : jetParticles) {
             float fade = MathUtils.clamp(1f - jet.age / jet.life, 0f, 1f) * jet.brightness;
@@ -473,21 +537,117 @@ public final class RpsArena extends ApplicationAdapter {
                 size, size, 1f, 1f, ACCRETION_DISK_ANGLE, 0, 0,
                 blackHoleSprite.getWidth(), blackHoleSprite.getHeight(), false, false);
         batch.end();
+        shapes.begin(ShapeRenderer.ShapeType.Filled);
+        drawAccretionLights(horizon, true);
+        drawAbsorptionFlares(horizon);
+        shapes.end();
         if (fieldConsumed) {
             batch.begin(); font.setColor(.95f, .78f, 1f, 1f); font.getData().setScale(1.45f); centered("EVENT HORIZON FILLS THE FIELD", arenaX, arenaY - horizon - 24f); font.getData().setScale(1.45f); batch.end();
         }
     }
 
     private void drawStarField() {
-        // A deterministic sparse field gives the arena depth without drawing a boundary around it.
-        for (int i = 0; i < 150; i++) {
-            float angle = i * 2.3999632f;
-            float radius = arenaRadius * .97f * (float)Math.sqrt(((i * 73) % 151 + .5f) / 151f);
-            float twinkle = .45f + .30f * MathUtils.sin(elapsed * (.35f + i % 7 * .07f) + i);
-            float cool = (i % 9 == 0) ? 1f : .78f;
-            shapes.setColor(.58f * cool, .68f * cool, .82f, twinkle);
-            shapes.circle(arenaX + MathUtils.cos(angle) * radius, arenaY + MathUtils.sin(angle) * radius,
-                    i % 23 == 0 ? 1.15f : .48f, 8);
+        // Thin-lens point-mass approximation: stars shift outward and may form a faint secondary image.
+        float horizon = blackHoleHorizon();
+        float einsteinRadius = horizon * 1.62f;
+        for (BackgroundStar star : backgroundStars) {
+            float sourceAngle = star.angle + elapsed * star.angularMotion;
+            float sourceRadius = arenaRadius * star.radius
+                    + MathUtils.sin(elapsed * .045f + star.phase) * arenaRadius * .0025f;
+            float root = (float)Math.sqrt(sourceRadius * sourceRadius + 4f * einsteinRadius * einsteinRadius);
+            float imageRadius = .5f * (sourceRadius + root);
+            if (imageRadius > arenaRadius * .985f) continue;
+            float magnification = 1f + Math.min(.85f, einsteinRadius * einsteinRadius
+                    / Math.max(1f, sourceRadius * sourceRadius) * .22f);
+            float twinkle = star.brightness * (.76f + .24f * MathUtils.sin(
+                    elapsed * (.45f + star.brightness * .9f) + star.phase));
+            float red = star.temperature < .32f ? 1f : star.temperature > .72f ? .64f : .88f;
+            float green = star.temperature < .32f ? .68f : star.temperature > .72f ? .80f : .90f;
+            float blue = star.temperature < .32f ? .43f : 1f;
+            float x = arenaX + MathUtils.cos(sourceAngle) * imageRadius;
+            float y = arenaY + MathUtils.sin(sourceAngle) * imageRadius;
+            drawBackgroundStar(x, y, star.size * magnification, red, green, blue, twinkle, star.shape);
+
+            float secondaryRadius = .5f * (root - sourceRadius);
+            if (sourceRadius < einsteinRadius * 2.1f && secondaryRadius > horizon * 1.015f) {
+                float secondaryAlpha = twinkle * .18f * (1f - sourceRadius / (einsteinRadius * 2.1f));
+                drawBackgroundStar(arenaX - MathUtils.cos(sourceAngle) * secondaryRadius,
+                        arenaY - MathUtils.sin(sourceAngle) * secondaryRadius,
+                        Math.max(.35f, star.size * .55f), red, green, blue, secondaryAlpha, 0);
+            }
+        }
+    }
+
+    private void drawBackgroundStar(float x, float y, float size, float red, float green, float blue,
+                                    float alpha, int shape) {
+        shapes.setColor(red * .35f, green * .35f, blue * .42f, alpha * .18f);
+        shapes.circle(x, y, size * 2.7f, 12);
+        shapes.setColor(red, green, blue, alpha);
+        if (shape == 2 && size > .9f) {
+            shapes.rectLine(x - size * 2.5f, y, x + size * 2.5f, y, Math.max(.28f, size * .24f));
+            shapes.rectLine(x, y - size * 2.5f, x, y + size * 2.5f, Math.max(.28f, size * .24f));
+            shapes.circle(x, y, size * .72f, 10);
+        } else if (shape == 1 && size > .65f) {
+            shapes.triangle(x, y + size * 1.35f, x - size * .72f, y, x + size * .72f, y);
+            shapes.triangle(x, y - size * 1.35f, x - size * .72f, y, x + size * .72f, y);
+        } else {
+            shapes.circle(x, y, Math.max(.28f, size), 9);
+        }
+    }
+
+    private void drawAccretionLights(float horizon, boolean front) {
+        float rotation = ACCRETION_DISK_ANGLE * MathUtils.degreesToRadians;
+        float cosRotation = MathUtils.cos(rotation), sinRotation = MathUtils.sin(rotation);
+        for (int lane = 0; lane < 3; lane++) {
+            float orbit = horizon * (1.28f + lane * .27f);
+            float flatten = .23f + lane * .035f;
+            for (int i = 0; i < 46; i++) {
+                float phaseJitter = MathUtils.sin(i * 12.9898f + lane * 7.31f) * .047f;
+                float phase = i * MathUtils.PI2 / 46f + phaseJitter
+                        + elapsed * (1.18f - lane * .19f) + lane * 1.7f;
+                boolean onFront = MathUtils.sin(phase) < 0f;
+                if (onFront != front) continue;
+                float localX = MathUtils.cos(phase) * orbit;
+                float localY = MathUtils.sin(phase) * orbit * flatten;
+                float x = arenaX + localX * cosRotation - localY * sinRotation;
+                float y = arenaY + localX * sinRotation + localY * cosRotation;
+                float previous = phase - .045f;
+                float oldX = MathUtils.cos(previous) * orbit;
+                float oldY = MathUtils.sin(previous) * orbit * flatten;
+                float px = arenaX + oldX * cosRotation - oldY * sinRotation;
+                float py = arenaY + oldX * sinRotation + oldY * cosRotation;
+                float knot = .52f + .48f * MathUtils.sin(i * 5.13f + lane * 2.7f + elapsed * 2.2f);
+                float approaching = MathUtils.clamp(.58f - localX / (orbit * 2.1f), .18f, 1f);
+                float alpha = (.15f + knot * .48f) * approaching * (front ? 1f : .42f);
+                shapes.setColor(1f, .42f + approaching * .46f, .10f + approaching * .46f, alpha * .22f);
+                shapes.rectLine(px, py, x, y, .75f + knot * 1.15f);
+                shapes.setColor(1f, .78f + approaching * .18f, .48f + approaching * .48f, alpha);
+                shapes.circle(x, y, .28f + knot * .55f, 8);
+            }
+        }
+    }
+
+    private void drawAbsorptionFlares(float horizon) {
+        for (AbsorptionFlare flare : absorptionFlares) {
+            float progress = MathUtils.clamp(flare.age / flare.life, 0f, 1f);
+            float fade = (1f - progress) * (1f - progress);
+            float angle = flare.angle + progress * (1.15f + flare.size * .015f);
+            float radius = Math.max(horizon * .985f, flare.radius * (1f - progress * .12f));
+            float x = arenaX + MathUtils.cos(angle) * radius;
+            float y = arenaY + MathUtils.sin(angle) * radius;
+            float tangentX = -MathUtils.sin(angle), tangentY = MathUtils.cos(angle);
+            float stretch = flare.size * (1.1f + progress * 4.4f);
+            float red = Math.max(.82f, flare.color.r);
+            float green = flare.color.g * (1f - progress * .58f) + .18f;
+            float blue = flare.color.b * (1f - progress * .84f) + .04f;
+            shapes.setColor(red, green, blue, fade * .11f);
+            shapes.circle(x, y, flare.size * (1.55f + progress * .85f), 16);
+            shapes.setColor(red, green, blue, fade * .70f);
+            shapes.rectLine(x - tangentX * stretch, y - tangentY * stretch,
+                    x + tangentX * stretch * .35f, y + tangentY * stretch * .35f,
+                    Math.max(.65f, flare.size * (1f - progress * .55f)));
+            shapes.setColor(1f, .94f, .78f, fade);
+            shapes.circle(x, y, Math.max(.5f, flare.size * .32f), 9);
         }
     }
 
@@ -515,11 +675,42 @@ public final class RpsArena extends ApplicationAdapter {
         float shimmer = .82f + .18f * MathUtils.sin(particle.age * 3f + particle.hue);
         Color color = particle.color;
         float x = particle.position.x, y = particle.position.y, size = particle.size;
+        if (particle.bodyType == 5) {
+            float breathe = .92f + .10f * MathUtils.sin(particle.age * .72f + particle.hue);
+            for (int i = 7; i >= 0; i--) {
+                float angle = particle.wobble * .055f + i * 2.3999632f;
+                float offset = size * (.08f + i * .055f);
+                float cloudSize = size * breathe * (.52f - i * .025f);
+                float alpha = (.035f + (7 - i) * .009f) * shimmer;
+                float warm = i % 3 == 0 ? .18f : 0f;
+                shapes.setColor(color.r + warm, color.g * (.82f + i * .018f), color.b, alpha);
+                shapes.circle(x + MathUtils.cos(angle) * offset, y + MathUtils.sin(angle) * offset * .58f,
+                        Math.max(2f, cloudSize), 18);
+            }
+            shapes.setColor(.73f, .88f, 1f, shimmer * .24f);
+            shapes.circle(x - size * .08f, y + size * .03f, Math.max(.8f, size * .055f), 9);
+            return;
+        }
+        if (particle.bodyType == 6) {
+            float inverseSpeed = 1f / Math.max(1f, particle.velocity.len());
+            float tailX = x - particle.velocity.x * inverseSpeed * size * 5.8f;
+            float tailY = y - particle.velocity.y * inverseSpeed * size * 5.8f;
+            shapes.setColor(.32f, .68f, 1f, shimmer * .11f);
+            shapes.rectLine(tailX, tailY, x, y, size * 2.1f);
+            shapes.setColor(.72f, .89f, 1f, shimmer * .45f);
+            shapes.rectLine(x - particle.velocity.x * inverseSpeed * size * 3.8f,
+                    y - particle.velocity.y * inverseSpeed * size * 3.8f, x, y, Math.max(.5f, size * .72f));
+            shapes.setColor(.94f, .98f, 1f, shimmer); shapes.circle(x, y, Math.max(.65f, size * .62f), 11);
+            return;
+        }
         if (particle.bodyType == 3) {
-            shapes.setColor(.50f, .72f, 1f, shimmer * .10f); shapes.circle(x, y, size * 2.05f, 14);
+            float pulse = 1f + .16f * MathUtils.sin(particle.age * (2.1f + particle.spin * .08f) + particle.hue);
+            shapes.setColor(.50f, .72f, 1f, shimmer * .12f); shapes.circle(x, y, size * 2.45f * pulse, 16);
             shapes.setColor(.82f, .91f, 1f, shimmer * .36f);
-            shapes.triangle(x - size * 1.8f, y, x + size * 1.8f, y, x, y + size * .18f);
-            shapes.triangle(x, y - size * 1.8f, x, y + size * 1.8f, x + size * .18f, y);
+            float rayX = MathUtils.cos(particle.wobble * .12f) * size * 2f;
+            float rayY = MathUtils.sin(particle.wobble * .12f) * size * 2f;
+            shapes.rectLine(x - rayX, y - rayY, x + rayX, y + rayY, Math.max(.35f, size * .16f));
+            shapes.rectLine(x + rayY, y - rayX, x - rayY, y + rayX, Math.max(.35f, size * .16f));
         }
         if (particle.bodyType == 2 && size > 3.6f) {
             float tilt = .28f + MathUtils.sin(particle.wobble * .08f) * .11f;
@@ -549,6 +740,17 @@ public final class RpsArena extends ApplicationAdapter {
         shapes.circle(x, y, size * .91f, 18);
         shapes.setColor(color.r, color.g, color.b, shimmer);
         shapes.circle(x - size * .16f, y + size * .13f, size * .65f, 16);
+        if (particle.bodyType == 2) {
+            float bandAngle = .10f * MathUtils.sin(particle.wobble * .09f);
+            float bandX = MathUtils.cos(bandAngle) * size * .67f;
+            float bandY = MathUtils.sin(bandAngle) * size * .67f;
+            shapes.setColor(.94f, .72f, .42f, shimmer * .34f);
+            shapes.rectLine(x - bandX, y - bandY - size * .18f, x + bandX, y + bandY - size * .18f,
+                    Math.max(.5f, size * .11f));
+            shapes.setColor(.30f, .20f, .14f, shimmer * .22f);
+            shapes.rectLine(x - bandX * .86f, y - bandY + size * .27f, x + bandX * .86f, y + bandY + size * .27f,
+                    Math.max(.45f, size * .08f));
+        }
         if (particle.bodyType == 1 || particle.bodyType == 3) {
             shapes.setColor(.92f, .97f, 1f, shimmer * .82f);
             shapes.circle(x - size * .31f, y + size * .29f, Math.max(.55f, size * .22f), 10);
@@ -790,6 +992,21 @@ public final class RpsArena extends ApplicationAdapter {
     }
 
     /** A high-resolution, turbulent disk with Doppler brightening and a truly dark horizon. */
+    private void createBackgroundStars() {
+        Random starRandom = new Random(0x51A7F13DL);
+        for (int i = 0; i < backgroundStars.length; i++) {
+            float brightness = .22f + (float)Math.pow(starRandom.nextFloat(), 2.4f) * .78f;
+            float size = .22f + brightness * brightness * 2.15f;
+            int shape = brightness > .84f ? 2 : brightness > .60f && starRandom.nextFloat() < .38f ? 1 : 0;
+            backgroundStars[i] = new BackgroundStar(
+                    .055f + (float)Math.sqrt(starRandom.nextFloat()) * .92f,
+                    starRandom.nextFloat() * MathUtils.PI2, size, brightness,
+                    starRandom.nextFloat() * MathUtils.PI2,
+                    (starRandom.nextFloat() - .5f) * .0022f,
+                    starRandom.nextFloat(), shape);
+        }
+    }
+
     private Texture createBlackHoleSprite() {
         final int size = 384;
         final float center = size * .5f;
