@@ -449,28 +449,30 @@ public final class CelestialTextureBank {
             for (int x = 0; x < size; x++) {
                 float dx = x - center + 0.5f;
                 float dy = y - center + 0.5f;
-                float dist = (float)Math.sqrt(dx * dx + dy * dy);
-                if (dist >= maxRadius) continue;
+                float nx = dx / maxRadius;
+                float ny = dy / maxRadius;
+                float distSq = nx * nx + ny * ny;
+                if (distSq >= 1.0f) continue;
 
-                float u = dist / maxRadius; // [0, 1]
-                float angle = MathUtils.atan2(dy, dx);
+                // 2D Cartesian multi-octave billowing cloud noise (NO angular harmonics / NO snowflake arms)
+                // Produces soft, rolling cumulus billows and pillowy convective lobes:
+                float w1 = MathUtils.sin(nx * 2.6f + ny * 1.4f + 0.9f) * MathUtils.cos(ny * 2.2f - nx * 1.3f + 0.5f);
+                float w2 = MathUtils.sin(nx * 4.8f - ny * 3.6f + 1.8f) * MathUtils.cos(ny * 4.5f + nx * 2.8f - 0.7f);
+                float w3 = MathUtils.sin(nx * 8.4f + ny * 7.2f - 2.3f) * 0.45f;
+                float billowNoise = w1 * 0.52f + w2 * 0.32f + w3 * 0.16f;
 
-                // Multi-frequency organic turbulence matching ejection cloud style
-                float turb = MathUtils.sin(angle * 4f + dist * 0.16f) * 0.14f
-                        + MathUtils.sin(angle * 7f - dist * 0.26f) * 0.09f
-                        + MathUtils.cos(angle * 11f + dist * 0.40f) * 0.05f;
-                float normDist = MathUtils.clamp(u + turb, 0f, 1f);
+                // Smooth quartic cloud envelope: zero derivative at center and boundary (C1 continuous, zero sharp edges)
+                float envelope = (1f - distSq) * (1f - distSq);
+                float cloudDensity = MathUtils.clamp(envelope * (0.85f + billowNoise * 0.65f), 0f, 1f);
 
-                // Soft Gaussian falloff with wispy outer filament taper
-                float core = (float)Math.exp(-normDist * normDist * 2.8f) * (1f - normDist);
-                float alpha = MathUtils.clamp(core * 0.88f, 0f, 1f);
+                // Soft smoky translucent alpha
+                float alpha = MathUtils.clamp(cloudDensity * 0.70f, 0f, 1f);
 
-                // Cloudy dark grey/brown nebula color:
-                // Denser center: warm smoky umber / dark brown-charcoal (0.28, 0.20, 0.15)
-                // Outer wispy fringe: cool dark smoky grey / ash (0.16, 0.14, 0.13)
-                float red = MathUtils.lerp(0.16f, 0.29f, core);
-                float green = MathUtils.lerp(0.13f, 0.21f, core);
-                float blue = MathUtils.lerp(0.11f, 0.16f, core);
+                // Cloudy dark grey/brown nebula colors matching images/accretion_disc.png:
+                // Warm smoky umber/sepia at denser centers, fading to cool smoky slate/charcoal at wispy edges
+                float red = MathUtils.lerp(0.14f, 0.25f, cloudDensity);
+                float green = MathUtils.lerp(0.12f, 0.19f, cloudDensity);
+                float blue = MathUtils.lerp(0.11f, 0.15f, cloudDensity);
 
                 map.setColor(red, green, blue, alpha);
                 map.drawPixel(x, y);

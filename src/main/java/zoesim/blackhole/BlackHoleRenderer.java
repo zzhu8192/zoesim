@@ -347,16 +347,17 @@ public final class BlackHoleRenderer {
             float px = arenaX + worldOffsetX;
             float py = arenaY + worldOffsetY;
 
-            // Organic subtle breathing and rotational drift
-            float breathe = 1f + 0.04f * MathUtils.sin(simTime * puff.driftSpeed * 1.5f);
-            float puffSize = horizon * puff.relSize * breathe;
-            float puffRot = BlackHolePhysics.ACCRETION_DISK_ANGLE + puff.rotation
-                    + MathUtils.sin(simTime * puff.driftSpeed) * 4f;
-            float alpha = puff.baseAlpha * MathUtils.clamp(0.88f + 0.12f * MathUtils.cos(simTime * puff.driftSpeed * 0.8f), 0f, 1f);
+            // Organic subtle breathing and drift
+            float breathe = 1f + 0.03f * MathUtils.sin(simTime * puff.driftSpeed * 1.5f);
+            float width = horizon * puff.relWidth * breathe;
+            float height = horizon * puff.relHeight * breathe;
+            float puffRot = BlackHolePhysics.ACCRETION_DISK_ANGLE + puff.tilt
+                    + MathUtils.sin(simTime * puff.driftSpeed) * 1.5f;
+            float alpha = puff.baseAlpha * MathUtils.clamp(0.90f + 0.10f * MathUtils.cos(simTime * puff.driftSpeed * 0.8f), 0f, 1f);
 
             batch.setColor(puff.tintR, puff.tintG, puff.tintB, alpha);
-            batch.draw(nebulaTexture, px - puffSize * 0.5f, py - puffSize * 0.5f,
-                    puffSize * 0.5f, puffSize * 0.5f, puffSize, puffSize,
+            batch.draw(nebulaTexture, px - width * 0.5f, py - height * 0.5f,
+                    width * 0.5f, height * 0.5f, width, height,
                     1f, 1f, puffRot, 0, 0, nebulaTexture.getWidth(), nebulaTexture.getHeight(), false, false);
         }
         batch.setColor(Color.WHITE);
@@ -793,18 +794,20 @@ public final class BlackHoleRenderer {
     private static final class ForegroundNebulaPuff {
         final float relU;       // Offset along disc major axis in units of horizon (negative = left, positive = right)
         final float relV;       // Offset perpendicular to disc in units of horizon (negative = below disc)
-        final float relSize;    // Size in units of horizon
-        final float rotation;   // Angle offset in degrees
+        final float relWidth;   // Width along disc plane in units of horizon
+        final float relHeight;  // Height perpendicular to disc in units of horizon
+        final float tilt;       // Slight tilt angle in degrees relative to disc plane
         final float driftSpeed; // Dynamic slow drift/pulsing speed
         final float tintR, tintG, tintB; // Micro color variation (dark warm charcoal/brown)
         final float baseAlpha;  // Base opacity
 
-        ForegroundNebulaPuff(float relU, float relV, float relSize, float rotation,
+        ForegroundNebulaPuff(float relU, float relV, float relWidth, float relHeight, float tilt,
                              float driftSpeed, float tintR, float tintG, float tintB, float baseAlpha) {
             this.relU = relU;
             this.relV = relV;
-            this.relSize = relSize;
-            this.rotation = rotation;
+            this.relWidth = relWidth;
+            this.relHeight = relHeight;
+            this.tilt = tilt;
             this.driftSpeed = driftSpeed;
             this.tintR = tintR;
             this.tintG = tintG;
@@ -816,24 +819,28 @@ public final class BlackHoleRenderer {
     private static final ForegroundNebulaPuff[] NEBULA_PUFFS = new ForegroundNebulaPuff[] {
         // --- Lower-Left Nebula Clump (overlapping lower-left horizon & bottom halo) ---
         // 1. Directly overlapping the lower-left edge of the black hole horizon & bottom halo
-        new ForegroundNebulaPuff(-0.58f, -0.72f, 1.18f, 15f, 0.25f, 1.05f, 0.95f, 0.85f, 0.82f),
+        new ForegroundNebulaPuff(-0.54f, -0.70f, 1.55f, 1.08f, -2f, 0.22f, 1.04f, 0.96f, 0.88f, 0.84f),
         // 2. Overlapping the bottom-left halo ring
-        new ForegroundNebulaPuff(-0.40f, -1.05f, 0.95f, 48f, -0.20f, 0.95f, 0.90f, 0.90f, 0.78f),
+        new ForegroundNebulaPuff(-0.36f, -0.96f, 1.35f, 0.92f, 3f, -0.18f, 0.96f, 0.92f, 0.90f, 0.80f),
         // 3. Spanning lower-left space beneath accretion disc
-        new ForegroundNebulaPuff(-1.05f, -0.85f, 1.35f, 85f, 0.18f, 1.10f, 0.98f, 0.88f, 0.72f),
-        // 4. Outer wispy trail toward left edge
-        new ForegroundNebulaPuff(-1.55f, -1.05f, 1.10f, 140f, -0.15f, 0.90f, 0.92f, 0.95f, 0.58f),
-        // 5. Deep lower-left under-hang
-        new ForegroundNebulaPuff(-0.85f, -1.35f, 1.25f, 210f, 0.22f, 1.00f, 0.92f, 0.85f, 0.65f),
+        new ForegroundNebulaPuff(-0.95f, -0.80f, 1.70f, 1.15f, -4f, 0.16f, 1.08f, 0.98f, 0.88f, 0.76f),
+        // 4. Deep lower-left under-hang
+        new ForegroundNebulaPuff(-0.72f, -1.22f, 1.45f, 1.00f, 2f, 0.20f, 1.00f, 0.92f, 0.85f, 0.70f),
+        // 5. Outer wispy trail toward left edge
+        new ForegroundNebulaPuff(-1.42f, -0.92f, 1.55f, 0.95f, -5f, -0.14f, 0.92f, 0.92f, 0.95f, 0.62f),
+        // 6. Far outer left haze
+        new ForegroundNebulaPuff(-1.85f, -1.10f, 1.35f, 0.85f, -2f, 0.18f, 0.88f, 0.88f, 0.92f, 0.48f),
 
         // --- Lower-Right Nebula Clump (overlapping lower-right horizon & bottom halo) ---
-        // 6. Directly overlapping the lower-right edge of the black hole horizon & bottom halo
-        new ForegroundNebulaPuff(0.55f, -0.70f, 1.08f, 35f, -0.22f, 1.02f, 0.96f, 0.88f, 0.80f),
-        // 7. Overlapping the bottom-right halo ring
-        new ForegroundNebulaPuff(0.38f, -1.00f, 0.88f, 75f, 0.18f, 0.95f, 0.92f, 0.90f, 0.74f),
-        // 8. Spanning lower-right space beneath accretion disc
-        new ForegroundNebulaPuff(1.02f, -0.82f, 1.22f, 115f, -0.16f, 1.08f, 0.96f, 0.86f, 0.68f),
-        // 9. Outer wispy trail toward right edge
-        new ForegroundNebulaPuff(1.48f, -1.02f, 0.95f, 165f, 0.20f, 0.92f, 0.90f, 0.92f, 0.55f)
+        // 7. Directly overlapping the lower-right edge of the black hole horizon & bottom halo
+        new ForegroundNebulaPuff(0.50f, -0.68f, 1.45f, 1.00f, 3f, -0.20f, 1.02f, 0.96f, 0.88f, 0.82f),
+        // 8. Overlapping the bottom-right halo ring
+        new ForegroundNebulaPuff(0.34f, -0.94f, 1.25f, 0.88f, -2f, 0.16f, 0.95f, 0.92f, 0.90f, 0.76f),
+        // 9. Spanning lower-right space beneath accretion disc
+        new ForegroundNebulaPuff(0.92f, -0.78f, 1.58f, 1.08f, 4f, -0.15f, 1.06f, 0.96f, 0.86f, 0.72f),
+        // 10. Outer wispy trail toward right edge
+        new ForegroundNebulaPuff(1.38f, -0.96f, 1.40f, 0.92f, 2f, 0.18f, 0.94f, 0.90f, 0.92f, 0.58f),
+        // 11. Far outer right haze
+        new ForegroundNebulaPuff(1.78f, -1.10f, 1.25f, 0.80f, -1f, -0.16f, 0.90f, 0.88f, 0.90f, 0.45f)
     };
 }
