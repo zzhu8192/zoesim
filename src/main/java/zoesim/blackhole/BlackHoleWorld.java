@@ -202,10 +202,11 @@ public final class BlackHoleWorld {
 
         // Dynamic Keplerian orbital velocity scaled for lively visual pace
         float circularSpeed = (float)Math.sqrt(BlackHolePhysics.gravitationalParameter(mass) / radius) * 2.25f;
-        float speedVariation = 0.94f + random.nextFloat() * 0.16f;
+        // Tripled variance range (0.48 vs previous 0.16) for pronounced speed diversity across stellar objects
+        float speedVariation = 0.76f + random.nextFloat() * 0.48f;
         float orbital = circularSpeed * speedVariation;
-        // Inward spiral drift: yields 2-4 energetic, accelerating revolutions
-        float inward = -5.5f - random.nextFloat() * 8.5f;
+        // Inward spiral drift: yields energetic, varied accelerating revolutions
+        float inward = -3.5f - random.nextFloat() * 12.0f;
 
         // True 3D orbital distribution across all space axes (X, Y, Z):
         // 1. Accretion Disc Co-Planar (35%): Aligned right along the -17° accretion disc plane

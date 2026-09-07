@@ -210,4 +210,35 @@ public class BlackHoleSimulationTest {
         world.reset();
         assertEquals(0f, world.getSimTime(), 0.0001f);
     }
+
+    @Test public void stellarObjectInitialVelocityShowsPronouncedVariance() {
+        zoesim.blackhole.BlackHoleWorld world = new zoesim.blackhole.BlackHoleWorld(new zoesim.blackhole.BlackHoleAudio());
+        world.resize(400f, 400f, 350f);
+        world.reset();
+
+        float minRatio = Float.MAX_VALUE;
+        float maxRatio = Float.MIN_VALUE;
+
+        for (zoesim.blackhole.CosmicParticle p : world.getCosmicParticles()) {
+            float rx = p.position.x - 400f;
+            float ry = p.position.y - 400f;
+            float rz = p.position.z;
+            float r = (float)Math.sqrt(rx * rx + ry * ry + rz * rz);
+            float baseCircularSpeed = (float)Math.sqrt(BlackHolePhysics.gravitationalParameter(world.getMass()) / r) * 2.25f;
+
+            // Compute tangential speed
+            float radialVel = (rx * p.velocity.x + ry * p.velocity.y + rz * p.velocity.z) / r;
+            float totalSpeedSq = p.velocity.x * p.velocity.x + p.velocity.y * p.velocity.y + p.velocity.z * p.velocity.z;
+            float tangSpeed = (float)Math.sqrt(Math.max(0f, totalSpeedSq - radialVel * radialVel));
+
+            float speedRatio = tangSpeed / baseCircularSpeed;
+            if (speedRatio < minRatio) minRatio = speedRatio;
+            if (speedRatio > maxRatio) maxRatio = speedRatio;
+        }
+
+        float varianceRange = maxRatio - minRatio;
+        assertTrue("Speed variance range must be significantly widened (>= 0.35)", varianceRange >= 0.35f);
+        assertTrue("Lowest speed fraction should be below 0.85", minRatio <= 0.85f);
+        assertTrue("Highest speed fraction should be above 1.15", maxRatio >= 1.15f);
+    }
 }
