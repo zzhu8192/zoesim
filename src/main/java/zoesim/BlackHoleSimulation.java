@@ -60,11 +60,22 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     }
 
     private static final class AbsorptionFlare {
+        static final int SPARK_COUNT = 14;
         final float angle, radius, size, life;
         final Color color;
+        final float[] spread = new float[SPARK_COUNT];
+        final float[] speed = new float[SPARK_COUNT];
+        final float[] scale = new float[SPARK_COUNT];
+        final float[] heat = new float[SPARK_COUNT];
         float age;
-        AbsorptionFlare(float angle, float radius, float size, float life, Color color) {
+        AbsorptionFlare(float angle, float radius, float size, float life, Color color, Random random) {
             this.angle = angle; this.radius = radius; this.size = size; this.life = life; this.color = color;
+            for (int i = 0; i < SPARK_COUNT; i++) {
+                spread[i] = (random.nextFloat() + random.nextFloat() - 1f) * .82f;
+                speed[i] = 18f + random.nextFloat() * (42f + size * 2.5f);
+                scale[i] = .35f + random.nextFloat() * .85f;
+                heat[i] = random.nextFloat();
+            }
         }
     }
 
@@ -72,9 +83,12 @@ public final class BlackHoleSimulation implements ArenaSimulation {
         final Vector2 position = new Vector2();
         final Vector2 velocity = new Vector2();
         final float size, life, brightness;
+        final float spectrumBias;
         float age;
-        JetParticle(float x, float y, float vx, float vy, float size, float life, float brightness) {
-            position.set(x, y); velocity.set(vx, vy); this.size = size; this.life = life; this.brightness = brightness;
+        JetParticle(float x, float y, float vx, float vy, float size, float life, float brightness,
+                    float spectrumBias) {
+            position.set(x, y); velocity.set(vx, vy); this.size = size; this.life = life;
+            this.brightness = brightness; this.spectrumBias = spectrumBias;
         }
     }
 
@@ -83,6 +97,7 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     private final Array<JetParticle> jetParticles = new Array<>();
     private final Array<AbsorptionFlare> absorptionFlares = new Array<>();
     private final BackgroundStar[] backgroundStars = new BackgroundStar[BACKGROUND_STAR_COUNT];
+    private final Color spectralColor = new Color();
     private final Sound absorbSound;
     private final Sound ambience;
     private final Texture blackHoleSprite;
@@ -244,7 +259,8 @@ public final class BlackHoleSimulation implements ArenaSimulation {
             jetParticles.add(new JetParticle(arenaX + MathUtils.cos(angle) * radius,
                     arenaY + MathUtils.sin(angle) * radius, MathUtils.cos(angle) * velocity,
                     MathUtils.sin(angle) * velocity, .8f + random.nextFloat() * 1.9f,
-                    .72f + random.nextFloat() * .62f, .68f + random.nextFloat() * .32f));
+                    .72f + random.nextFloat() * .62f, .68f + random.nextFloat() * .32f,
+                    MathUtils.clamp(.72f - Math.abs(spread) * 2.8f + random.nextFloat() * .28f, 0f, 1f)));
         }
     }
 
@@ -258,7 +274,7 @@ public final class BlackHoleSimulation implements ArenaSimulation {
                 : particle.bodyType == 2 ? MathUtils.clamp(particle.size * .38f, 1.8f, 5.5f)
                 : MathUtils.clamp(particle.size, 1.1f, 6f);
         absorptionFlares.add(new AbsorptionFlare(angle, horizon() * 1.04f, flareSize,
-                .42f + Math.min(.36f, flareSize * .045f), particle.color));
+                .42f + Math.min(.36f, flareSize * .045f), particle.color, random));
         if (absorptionFlares.size > 140) absorptionFlares.removeIndex(0);
         if (nextAbsorbSound <= 0f) {
             absorbSound.play(.22f, .38f + Math.min(.26f, particle.size * .04f), 0f);
@@ -302,17 +318,28 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     private void drawJetParticles() {
         for (JetParticle jet : jetParticles) {
             float fade = MathUtils.clamp(1f - jet.age / jet.life, 0f, 1f) * jet.brightness;
+            float energy = MathUtils.clamp((1f - jet.age / jet.life) * .72f + jet.spectrumBias * .38f, 0f, 1f);
             float inverseSpeed = 1f / Math.max(1f, jet.velocity.len());
             float tail = 7f + jet.size * 4f;
             float tailX = jet.position.x - jet.velocity.x * inverseSpeed * tail;
             float tailY = jet.position.y - jet.velocity.y * inverseSpeed * tail;
-            shapes.setColor(.18f, .48f, 1f, fade * .18f);
+            setSpectralColor(energy - .22f, fade * .13f, .88f);
             shapes.rectLine(tailX, tailY, jet.position.x, jet.position.y, jet.size * 3.6f);
-            shapes.setColor(.48f, .82f, 1f, fade * .55f);
+            setSpectralColor(energy, fade * .56f, .76f);
             shapes.rectLine(tailX, tailY, jet.position.x, jet.position.y, Math.max(.7f, jet.size * 1.35f));
-            shapes.setColor(.94f, .99f, 1f, fade * .92f);
+            setSpectralColor(energy + .22f, fade * .94f, .34f);
             shapes.circle(jet.position.x, jet.position.y, Math.max(.55f, jet.size * .48f), 10);
         }
+    }
+
+    /** False-color synchrotron spectrum: cooled red/gold edges through cyan/blue to a white-hot core. */
+    private void setSpectralColor(float energy, float alpha, float saturationScale) {
+        float normalized = MathUtils.clamp(energy, 0f, 1f);
+        float hue = 8f + normalized * 258f;
+        float saturation = (.88f - normalized * .72f) * saturationScale;
+        spectralColor.fromHsv(hue, MathUtils.clamp(saturation, .08f, .9f), 1f);
+        spectralColor.a = alpha;
+        shapes.setColor(spectralColor);
     }
 
     private void drawStarField() {
@@ -359,51 +386,84 @@ public final class BlackHoleSimulation implements ArenaSimulation {
     private void drawAccretionLights(float horizon, boolean front) {
         float rotation = ACCRETION_DISK_ANGLE * MathUtils.degreesToRadians;
         float cosRotation = MathUtils.cos(rotation), sinRotation = MathUtils.sin(rotation);
-        for (int lane = 0; lane < 3; lane++) {
-            float orbit = horizon * (1.28f + lane * .27f), flatten = .23f + lane * .035f;
-            for (int i = 0; i < 46; i++) {
-                float phase = i * MathUtils.PI2 / 46f + MathUtils.sin(i * 12.9898f + lane * 7.31f) * .047f
-                        + elapsed * (1.18f - lane * .19f) + lane * 1.7f;
+        for (int lane = 0; lane < 4; lane++) {
+            int knotCount = 25 + lane * 7;
+            float orbit = horizon * (1.21f + lane * .20f), flatten = .21f + lane * .025f;
+            for (int i = 0; i < knotCount; i++) {
+                float randomness = randomUnit(i + lane * 101);
+                float orbitSpeed = .78f + randomUnit(i * 7 + lane * 307) * .58f - lane * .08f;
+                float phase = i * MathUtils.PI2 / knotCount + (randomness - .5f) * .17f
+                        + elapsed * orbitSpeed + lane * 1.41f;
                 boolean onFront = MathUtils.sin(phase) < 0f;
                 if (onFront != front) continue;
-                float localX = MathUtils.cos(phase) * orbit, localY = MathUtils.sin(phase) * orbit * flatten;
-                float x = arenaX + localX * cosRotation - localY * sinRotation;
-                float y = arenaY + localX * sinRotation + localY * cosRotation;
-                float previous = phase - .045f;
-                float oldX = MathUtils.cos(previous) * orbit, oldY = MathUtils.sin(previous) * orbit * flatten;
-                float px = arenaX + oldX * cosRotation - oldY * sinRotation;
-                float py = arenaY + oldX * sinRotation + oldY * cosRotation;
-                float knot = .52f + .48f * MathUtils.sin(i * 5.13f + lane * 2.7f + elapsed * 2.2f);
+                float radialNoise = 1f + (randomUnit(i * 13 + lane * 59) - .5f) * .10f
+                        + MathUtils.sin(elapsed * .63f + i * 2.7f) * .018f;
+                float localX = MathUtils.cos(phase) * orbit * radialNoise;
                 float approaching = MathUtils.clamp(.58f - localX / (orbit * 2.1f), .18f, 1f);
-                float alpha = (.15f + knot * .48f) * approaching * (front ? 1f : .42f);
-                shapes.setColor(1f, .42f + approaching * .46f, .10f + approaching * .46f, alpha * .22f);
-                shapes.rectLine(px, py, x, y, .75f + knot * 1.15f);
-                shapes.setColor(1f, .78f + approaching * .18f, .48f + approaching * .48f, alpha);
-                shapes.circle(x, y, .28f + knot * .55f, 8);
+                float temperature = MathUtils.clamp(.18f + approaching * .66f
+                        + (randomUnit(i * 19 + lane * 83) - .5f) * .30f, 0f, 1f);
+                float knot = .30f + randomUnit(i * 23 + lane * 191) * .70f;
+                float alpha = (.12f + knot * .46f) * approaching * (front ? 1f : .38f);
+                int trailPoints = 2 + (int)(randomUnit(i * 31 + lane * 17) * 4f);
+                for (int trail = trailPoints - 1; trail >= 0; trail--) {
+                    float trailPhase = phase - trail * (.018f + knot * .010f);
+                    float trailX = MathUtils.cos(trailPhase) * orbit * radialNoise;
+                    float trailY = MathUtils.sin(trailPhase) * orbit * flatten * radialNoise;
+                    float x = arenaX + trailX * cosRotation - trailY * sinRotation;
+                    float y = arenaY + trailX * sinRotation + trailY * cosRotation;
+                    float trailFade = 1f - trail / (float)(trailPoints + 1);
+                    float red = 1f;
+                    float green = .28f + temperature * .68f;
+                    float blue = .035f + temperature * temperature * .91f;
+                    shapes.setColor(red, green, blue, alpha * trailFade * .16f);
+                    shapes.circle(x, y, .85f + knot * 1.45f, 10);
+                    shapes.setColor(1f, Math.min(1f, green + .12f), Math.min(1f, blue + .18f),
+                            alpha * trailFade);
+                    shapes.circle(x, y, .18f + knot * .48f, 8);
+                }
             }
         }
     }
 
     private void drawAbsorptionFlares(float horizon) {
         for (AbsorptionFlare flare : absorptionFlares) {
-            float progress = MathUtils.clamp(flare.age / flare.life, 0f, 1f), fade = (1f - progress) * (1f - progress);
-            float angle = flare.angle + progress * (1.15f + flare.size * .015f);
-            float radius = Math.max(horizon * .985f, flare.radius * (1f - progress * .12f));
-            float x = arenaX + MathUtils.cos(angle) * radius, y = arenaY + MathUtils.sin(angle) * radius;
-            float tangentX = -MathUtils.sin(angle), tangentY = MathUtils.cos(angle);
-            float stretch = flare.size * (1.1f + progress * 4.4f);
-            float red = Math.max(.82f, flare.color.r);
-            float green = flare.color.g * (1f - progress * .58f) + .18f;
-            float blue = flare.color.b * (1f - progress * .84f) + .04f;
-            shapes.setColor(red, green, blue, fade * .11f);
-            shapes.circle(x, y, flare.size * (1.55f + progress * .85f), 16);
-            shapes.setColor(red, green, blue, fade * .70f);
-            shapes.rectLine(x - tangentX * stretch, y - tangentY * stretch,
-                    x + tangentX * stretch * .35f, y + tangentY * stretch * .35f,
-                    Math.max(.65f, flare.size * (1f - progress * .55f)));
-            shapes.setColor(1f, .94f, .78f, fade);
-            shapes.circle(x, y, Math.max(.5f, flare.size * .32f), 9);
+            float progress = MathUtils.clamp(flare.age / flare.life, 0f, 1f);
+            float baseAngle = flare.angle + progress * .62f;
+            float radialX = MathUtils.cos(baseAngle), radialY = MathUtils.sin(baseAngle);
+            float tangentX = -radialY, tangentY = radialX;
+            float originRadius = Math.max(horizon * 1.005f, flare.radius * (1f - progress * .055f));
+            float originX = arenaX + radialX * originRadius;
+            float originY = arenaY + radialY * originRadius;
+            for (int i = 0; i < AbsorptionFlare.SPARK_COUNT; i++) {
+                float delay = i * .012f;
+                float sparkAge = Math.max(0f, flare.age - delay);
+                if (sparkAge <= 0f) continue;
+                float lifeProgress = MathUtils.clamp(sparkAge / flare.life, 0f, 1f);
+                float fade = (1f - lifeProgress) * (1f - lifeProgress);
+                float along = flare.speed[i] * sparkAge * (1f + flare.spread[i] * .16f);
+                float radialTravel = flare.spread[i] * flare.speed[i] * sparkAge * .34f
+                        - 34f * sparkAge * sparkAge;
+                float x = originX + tangentX * along + radialX * radialTravel;
+                float y = originY + tangentY * along + radialY * radialTravel;
+                float tail = 1.5f + flare.speed[i] * .038f;
+                float heat = MathUtils.clamp(flare.heat[i] + (1f - lifeProgress) * .52f, 0f, 1f);
+                float red = Math.max(.78f, flare.color.r);
+                float green = MathUtils.lerp(.20f + flare.color.g * .32f, .96f, heat);
+                float blue = MathUtils.lerp(.035f + flare.color.b * .18f, .82f, heat * heat);
+                float sparkSize = Math.max(.32f, flare.size * flare.scale[i] * .24f);
+                shapes.setColor(red, green, blue, fade * .10f);
+                shapes.circle(x, y, sparkSize * 3.2f, 10);
+                shapes.setColor(red, green, blue, fade * .66f);
+                shapes.rectLine(x - tangentX * tail, y - tangentY * tail, x, y, Math.max(.3f, sparkSize * .62f));
+                shapes.setColor(1f, .97f, .86f, fade * .92f);
+                shapes.circle(x, y, sparkSize * .38f, 7);
+            }
         }
+    }
+
+    private static float randomUnit(int value) {
+        float raw = MathUtils.sin(value * 12.9898f + 78.233f) * 43758.547f;
+        return raw - (float)Math.floor(raw);
     }
 
     private void drawJetBeams(float horizon) {
@@ -415,12 +475,18 @@ public final class BlackHoleSimulation implements ArenaSimulation {
             float endX = arenaX + axisX * pole * arenaRadius * .92f;
             float endY = arenaY + axisY * pole * arenaRadius * .92f;
             float pulse = .72f + .12f * MathUtils.sin(elapsed * 3.1f + pole);
-            shapes.setColor(.09f, .30f, .76f, .055f * pulse);
+            setSpectralColor(.12f, .024f * pulse, 1f);
             shapes.triangle(startX + sideX * horizon * .10f, startY + sideY * horizon * .10f,
-                    endX + sideX * 18f, endY + sideY * 18f, endX - sideX * 18f, endY - sideY * 18f);
-            shapes.setColor(.35f, .70f, 1f, .08f * pulse);
+                    endX + sideX * 22f, endY + sideY * 22f, endX - sideX * 22f, endY - sideY * 22f);
+            setSpectralColor(.42f, .032f * pulse, .92f);
+            shapes.triangle(startX + sideX * horizon * .070f, startY + sideY * horizon * .070f,
+                    endX + sideX * 13f, endY + sideY * 13f, endX - sideX * 13f, endY - sideY * 13f);
+            setSpectralColor(.72f, .050f * pulse, .76f);
             shapes.triangle(startX + sideX * horizon * .035f, startY + sideY * horizon * .035f,
-                    endX + sideX * 5f, endY + sideY * 5f, endX - sideX * 5f, endY - sideY * 5f);
+                    endX + sideX * 6f, endY + sideY * 6f, endX - sideX * 6f, endY - sideY * 6f);
+            setSpectralColor(.98f, .065f * pulse, .34f);
+            shapes.triangle(startX + sideX * horizon * .014f, startY + sideY * horizon * .014f,
+                    endX + sideX * 2f, endY + sideY * 2f, endX - sideX * 2f, endY - sideY * 2f);
         }
     }
 
