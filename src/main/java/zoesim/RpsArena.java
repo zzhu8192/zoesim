@@ -26,6 +26,15 @@ import java.util.Random;
 public final class RpsArena extends ApplicationAdapter {
     private static final int MAX_PIECES = 360;
     private static final float PIECE_RADIUS = 17f;
+    private static final float ACCRETION_DISK_ANGLE = -17f;
+    private static final float JET_AXIS = (ACCRETION_DISK_ANGLE + 90f) * MathUtils.degreesToRadians;
+    private static final float COSMIC_SPAWN_INTERVAL = .075f;
+    private static final int MAX_COSMIC_PARTICLES = 700;
+    private static final Color[] CELESTIAL_PALETTE = {
+            new Color(.35f, .26f, .19f, 1f), new Color(.43f, .64f, .78f, 1f),
+            new Color(.77f, .56f, .32f, 1f), new Color(.86f, .88f, .91f, 1f),
+            new Color(.48f, .25f, .16f, 1f)
+    };
     private final Random random = new Random();
     private final Array<Piece> pieces = new Array<>();
     private final Array<Impact> impacts = new Array<>();
@@ -139,8 +148,12 @@ public final class RpsArena extends ApplicationAdapter {
         final Vector2 position = new Vector2();
         final Vector2 velocity = new Vector2();
         final float size;
+        final float life;
+        final float brightness;
         float age;
-        JetParticle(float x, float y, float vx, float vy, float size) { position.set(x, y); velocity.set(vx, vy); this.size = size; }
+        JetParticle(float x, float y, float vx, float vy, float size, float life, float brightness) {
+            position.set(x, y); velocity.set(vx, vy); this.size = size; this.life = life; this.brightness = brightness;
+        }
     }
 
     @Override public void create() {
@@ -261,12 +274,16 @@ public final class RpsArena extends ApplicationAdapter {
     private void updateBlackHole(float dt) {
         if (fieldConsumed) return;
         nextAbsorbSound -= dt;
-        cosmicSpawnTimer += dt;
-        jetTimer += dt;
+        float simulationDt = dt * speed;
+        cosmicSpawnTimer += simulationDt;
+        jetTimer += simulationDt;
         float horizon = blackHoleHorizon();
         float gravitationalParameter = BlackHoleSimulation.gravitationalParameter(blackHoleMass);
-        while (cosmicSpawnTimer > .32f && cosmicParticles.size < 320) { cosmicSpawnTimer -= .32f; spawnCosmicParticle(true); }
-        if (jetTimer > .17f) { jetTimer = 0f; emitJets(horizon); }
+        while (cosmicSpawnTimer > COSMIC_SPAWN_INTERVAL && cosmicParticles.size < MAX_COSMIC_PARTICLES) {
+            cosmicSpawnTimer -= COSMIC_SPAWN_INTERVAL;
+            spawnCosmicParticle(true);
+        }
+        if (jetTimer > .065f) { jetTimer = 0f; emitJets(horizon); }
         for (Iterator<CosmicParticle> it = cosmicParticles.iterator(); it.hasNext();) {
             CosmicParticle particle = it.next();
             float dx = arenaX - particle.position.x, dy = arenaY - particle.position.y;
@@ -275,13 +292,13 @@ public final class RpsArena extends ApplicationAdapter {
             if (distance < horizon) { absorb(particle); it.remove(); continue; }
             // Inverse-square gravity with a small softening radius for numerical stability.
             float gravity = gravitationalParameter / Math.max(distance2, 900f);
-            particle.velocity.add(dx / distance * gravity * dt, dy / distance * gravity * dt);
+            particle.velocity.add(dx / distance * gravity * simulationDt, dy / distance * gravity * simulationDt);
             // Dust-like drag slowly sheds angular momentum, producing a natural accretion spiral.
-            particle.velocity.scl(1f - dt * .018f);
+            particle.velocity.scl(Math.max(.92f, 1f - simulationDt * .018f));
             particle.velocity.limit(340f);
-            particle.position.mulAdd(particle.velocity, dt * speed);
-            particle.age += dt;
-            particle.wobble += particle.spin * dt;
+            particle.position.mulAdd(particle.velocity, simulationDt);
+            particle.age += simulationDt;
+            particle.wobble += particle.spin * simulationDt;
             dx = particle.position.x - arenaX;
             dy = particle.position.y - arenaY;
             distance = (float)Math.sqrt(dx * dx + dy * dy);
@@ -297,9 +314,10 @@ public final class RpsArena extends ApplicationAdapter {
         }
         for (Iterator<JetParticle> it = jetParticles.iterator(); it.hasNext();) {
             JetParticle jet = it.next();
-            jet.position.mulAdd(jet.velocity, dt * speed);
-            jet.velocity.scl(.985f); jet.age += dt;
-            if (jet.age > 1.35f || jet.position.dst2(arenaX, arenaY) > arenaRadius * arenaRadius) it.remove();
+            jet.position.mulAdd(jet.velocity, simulationDt);
+            jet.velocity.scl(1f + simulationDt * .08f);
+            jet.age += simulationDt;
+            if (jet.age > jet.life || jet.position.dst2(arenaX, arenaY) > arenaRadius * arenaRadius) it.remove();
         }
         if (blackHoleHorizon() >= arenaRadius - 10f) { fieldConsumed = true; paused = true; stopBlackHoleAmbience(); }
     }
@@ -344,19 +362,21 @@ public final class RpsArena extends ApplicationAdapter {
         float vy = MathUtils.sin(angle + MathUtils.HALF_PI) * orbital + MathUtils.sin(angle) * inward;
         float size = 1.2f + (float)Math.pow(random.nextFloat(), 2.2f) * 13f;
         int type = random.nextInt(5);
-        Color[] palette = { new Color(.39f, .29f, .22f, 1f), new Color(.42f, .60f, .77f, 1f), new Color(.78f, .56f, .31f, 1f), new Color(.82f, .84f, .88f, 1f), new Color(.48f, .25f, .17f, 1f) };
-        cosmicParticles.add(new CosmicParticle(x, y, vx, vy, random.nextFloat() * 360f, size, type, palette[type], 1.5f + random.nextFloat() * 4f));
+        cosmicParticles.add(new CosmicParticle(x, y, vx, vy, random.nextFloat() * 360f, size, type,
+                CELESTIAL_PALETTE[type], 1.5f + random.nextFloat() * 4f));
     }
 
     private void emitJets(float horizon) {
-        // Relativistic jets are modeled as periodically expelled plasma along the rotation poles.
-        for (int pole = -1; pole <= 1; pole += 2) for (int i = 0; i < 3; i++) {
-            float spread = (random.nextFloat() - .5f) * .20f;
-            float angle = pole > 0 ? MathUtils.HALF_PI + spread : -MathUtils.HALF_PI + spread;
-            float radius = horizon * .76f;
-            float velocity = 155f + random.nextFloat() * 105f;
-            jetParticles.add(new JetParticle(arenaX + MathUtils.cos(angle) * radius, arenaY + MathUtils.sin(angle) * radius,
-                    MathUtils.cos(angle) * velocity, MathUtils.sin(angle) * velocity, 1.3f + random.nextFloat() * 2.3f));
+        // The jet axis is perpendicular to the same tilted plane used to render the accretion disk.
+        for (int pole = -1; pole <= 1; pole += 2) for (int i = 0; i < 2; i++) {
+            float spread = (random.nextFloat() - .5f) * .075f;
+            float angle = JET_AXIS + (pole < 0 ? MathUtils.PI : 0f) + spread;
+            float radius = horizon * (1.02f + random.nextFloat() * .12f);
+            float velocity = 225f + random.nextFloat() * 135f;
+            jetParticles.add(new JetParticle(
+                    arenaX + MathUtils.cos(angle) * radius, arenaY + MathUtils.sin(angle) * radius,
+                    MathUtils.cos(angle) * velocity, MathUtils.sin(angle) * velocity,
+                    .8f + random.nextFloat() * 1.9f, .72f + random.nextFloat() * .62f, .68f + random.nextFloat() * .32f));
         }
     }
 
@@ -395,11 +415,17 @@ public final class RpsArena extends ApplicationAdapter {
     private void drawBackground() {
         Gdx.gl.glClearColor(.018f, .028f, .08f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         shapes.setProjectionMatrix(camera.combined);
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(.025f, .05f, .13f, 1f); shapes.rect(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        shapes.setColor(.06f, .13f, .24f, .20f); shapes.circle(arenaX, arenaY, arenaRadius + 80);
-        shapes.setColor(.11f, .28f, .44f, .12f); shapes.circle(arenaX, arenaY, arenaRadius + 28);
+        if (simulationMode == SimulationMode.BLACK_HOLE) {
+            shapes.setColor(.003f, .006f, .014f, 1f); shapes.rect(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        } else {
+            shapes.setColor(.025f, .05f, .13f, 1f); shapes.rect(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+            shapes.setColor(.06f, .13f, .24f, .20f); shapes.circle(arenaX, arenaY, arenaRadius + 80);
+            shapes.setColor(.11f, .28f, .44f, .12f); shapes.circle(arenaX, arenaY, arenaRadius + 28);
+        }
         shapes.end();
     }
 
@@ -422,49 +448,113 @@ public final class RpsArena extends ApplicationAdapter {
     private void drawBlackHoleArena() {
         float horizon = blackHoleHorizon();
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(.006f, .01f, .04f, 1f); shapes.circle(arenaX, arenaY, arenaRadius);
-        // Deep, nearly black gravitational shading outside the event horizon.
-        for (int ring = 8; ring >= 0; ring--) {
-            float radius = horizon + ring * 14f;
-            float shade = .006f + ring * .006f;
-            shapes.setColor(shade, .004f, shade * 2.2f, .34f);
-            shapes.circle(arenaX, arenaY, radius);
-        }
+        shapes.setColor(.0015f, .003f, .009f, 1f); shapes.circle(arenaX, arenaY, arenaRadius);
+        drawStarField();
+        drawJetBeams(horizon);
         for (CosmicParticle particle : cosmicParticles) drawCelestialBody(particle);
         for (JetParticle jet : jetParticles) {
-            float fade = 1f - jet.age / 1.35f;
-            shapes.setColor(.44f, .76f, 1f, fade * .75f); shapes.circle(jet.position.x, jet.position.y, jet.size);
-            shapes.setColor(.94f, .98f, 1f, fade * .75f); shapes.circle(jet.position.x, jet.position.y, jet.size * .43f);
+            float fade = MathUtils.clamp(1f - jet.age / jet.life, 0f, 1f) * jet.brightness;
+            float inverseSpeed = 1f / Math.max(1f, jet.velocity.len());
+            float tail = 7f + jet.size * 4f;
+            float tailX = jet.position.x - jet.velocity.x * inverseSpeed * tail;
+            float tailY = jet.position.y - jet.velocity.y * inverseSpeed * tail;
+            shapes.setColor(.18f, .48f, 1f, fade * .18f);
+            shapes.rectLine(tailX, tailY, jet.position.x, jet.position.y, jet.size * 3.6f);
+            shapes.setColor(.48f, .82f, 1f, fade * .55f);
+            shapes.rectLine(tailX, tailY, jet.position.x, jet.position.y, Math.max(.7f, jet.size * 1.35f));
+            shapes.setColor(.94f, .99f, 1f, fade * .92f);
+            shapes.circle(jet.position.x, jet.position.y, Math.max(.55f, jet.size * .48f), 10);
         }
         shapes.end();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
-        float size = horizon * 5.23f + MathUtils.sin(elapsed * 2f) * 5f;
-        batch.draw(blackHoleSprite, arenaX - size * .5f, arenaY - size * .5f, size * .5f, size * .5f, size, size, 1f, 1f, -17f, 0, 0, blackHoleSprite.getWidth(), blackHoleSprite.getHeight(), false, false);
+        float size = horizon * 5.35f + MathUtils.sin(elapsed * 1.35f) * 1.5f;
+        batch.draw(blackHoleSprite, arenaX - size * .5f, arenaY - size * .5f, size * .5f, size * .5f,
+                size, size, 1f, 1f, ACCRETION_DISK_ANGLE, 0, 0,
+                blackHoleSprite.getWidth(), blackHoleSprite.getHeight(), false, false);
         batch.end();
-        shapes.begin(ShapeRenderer.ShapeType.Line);
-        shapes.setColor(.23f, .17f, .42f, .55f); shapes.circle(arenaX, arenaY, horizon + 3f);
-        shapes.setColor(.27f, .57f, 1f, .72f); shapes.circle(arenaX, arenaY, arenaRadius);
-        shapes.end();
         if (fieldConsumed) {
             batch.begin(); font.setColor(.95f, .78f, 1f, 1f); font.getData().setScale(1.45f); centered("EVENT HORIZON FILLS THE FIELD", arenaX, arenaY - horizon - 24f); font.getData().setScale(1.45f); batch.end();
         }
     }
 
+    private void drawStarField() {
+        // A deterministic sparse field gives the arena depth without drawing a boundary around it.
+        for (int i = 0; i < 150; i++) {
+            float angle = i * 2.3999632f;
+            float radius = arenaRadius * .97f * (float)Math.sqrt(((i * 73) % 151 + .5f) / 151f);
+            float twinkle = .45f + .30f * MathUtils.sin(elapsed * (.35f + i % 7 * .07f) + i);
+            float cool = (i % 9 == 0) ? 1f : .78f;
+            shapes.setColor(.58f * cool, .68f * cool, .82f, twinkle);
+            shapes.circle(arenaX + MathUtils.cos(angle) * radius, arenaY + MathUtils.sin(angle) * radius,
+                    i % 23 == 0 ? 1.15f : .48f, 8);
+        }
+    }
+
+    private void drawJetBeams(float horizon) {
+        float axisX = MathUtils.cos(JET_AXIS), axisY = MathUtils.sin(JET_AXIS);
+        float sideX = -axisY, sideY = axisX;
+        for (int pole = -1; pole <= 1; pole += 2) {
+            float startX = arenaX + axisX * pole * horizon * .84f;
+            float startY = arenaY + axisY * pole * horizon * .84f;
+            float endX = arenaX + axisX * pole * arenaRadius * .92f;
+            float endY = arenaY + axisY * pole * arenaRadius * .92f;
+            float pulse = .72f + .12f * MathUtils.sin(elapsed * 3.1f + pole);
+            shapes.setColor(.09f, .30f, .76f, .055f * pulse);
+            shapes.triangle(startX + sideX * horizon * .10f, startY + sideY * horizon * .10f,
+                    endX + sideX * 18f, endY + sideY * 18f,
+                    endX - sideX * 18f, endY - sideY * 18f);
+            shapes.setColor(.35f, .70f, 1f, .08f * pulse);
+            shapes.triangle(startX + sideX * horizon * .035f, startY + sideY * horizon * .035f,
+                    endX + sideX * 5f, endY + sideY * 5f,
+                    endX - sideX * 5f, endY - sideY * 5f);
+        }
+    }
+
     private void drawCelestialBody(CosmicParticle particle) {
-        float shimmer = .75f + .25f * MathUtils.sin(particle.age * 4f + particle.hue);
+        float shimmer = .82f + .18f * MathUtils.sin(particle.age * 3f + particle.hue);
         Color color = particle.color;
-        shapes.setColor(color.r * .35f, color.g * .35f, color.b * .35f, shimmer); shapes.circle(particle.position.x + particle.size * .22f, particle.position.y - particle.size * .18f, particle.size);
-        shapes.setColor(color.r, color.g, color.b, shimmer); shapes.circle(particle.position.x, particle.position.y, particle.size * .88f);
+        float x = particle.position.x, y = particle.position.y, size = particle.size;
+        if (particle.bodyType == 3) {
+            shapes.setColor(.50f, .72f, 1f, shimmer * .10f); shapes.circle(x, y, size * 2.05f, 14);
+            shapes.setColor(.82f, .91f, 1f, shimmer * .36f);
+            shapes.triangle(x - size * 1.8f, y, x + size * 1.8f, y, x, y + size * .18f);
+            shapes.triangle(x, y - size * 1.8f, x, y + size * 1.8f, x + size * .18f, y);
+        }
+        if (particle.bodyType == 2 && size > 3.6f) {
+            float tilt = .28f + MathUtils.sin(particle.wobble * .08f) * .11f;
+            float ringX = MathUtils.cos(tilt) * size * 1.42f;
+            float ringY = MathUtils.sin(tilt) * size * 1.42f;
+            shapes.setColor(.72f, .55f, .34f, shimmer * .42f);
+            shapes.rectLine(x - ringX, y - ringY, x + ringX, y + ringY, Math.max(.7f, size * .18f));
+        }
+        if (particle.bodyType == 4 && size > 2.6f) {
+            for (int i = 0; i < 7; i++) {
+                float a = particle.wobble + i * MathUtils.PI2 / 7f;
+                float b = particle.wobble + (i + 1) * MathUtils.PI2 / 7f;
+                float ra = size * (.78f + .19f * MathUtils.sin(i * 4.7f + particle.hue));
+                float rb = size * (.78f + .19f * MathUtils.sin((i + 1) * 4.7f + particle.hue));
+                float light = .62f + i * .035f;
+                shapes.setColor(color.r * light, color.g * light, color.b * light, shimmer);
+                shapes.triangle(x, y, x + MathUtils.cos(a) * ra, y + MathUtils.sin(a) * ra,
+                        x + MathUtils.cos(b) * rb, y + MathUtils.sin(b) * rb);
+            }
+            shapes.setColor(.10f, .075f, .055f, shimmer * .48f);
+            shapes.circle(x - size * .24f, y + size * .16f, Math.max(.55f, size * .13f), 8);
+            return;
+        }
+        shapes.setColor(color.r * .18f, color.g * .18f, color.b * .18f, shimmer * .45f);
+        shapes.circle(x + size * .16f, y - size * .14f, size * 1.12f, 18);
+        shapes.setColor(color.r * .72f, color.g * .72f, color.b * .72f, shimmer);
+        shapes.circle(x, y, size * .91f, 18);
+        shapes.setColor(color.r, color.g, color.b, shimmer);
+        shapes.circle(x - size * .16f, y + size * .13f, size * .65f, 16);
         if (particle.bodyType == 1 || particle.bodyType == 3) {
-            shapes.setColor(.9f, .95f, 1f, shimmer * .65f); shapes.circle(particle.position.x - particle.size * .28f, particle.position.y + particle.size * .27f, Math.max(.7f, particle.size * .25f));
-        }
-        if (particle.bodyType == 2 && particle.size > 3.6f) {
-            shapes.setColor(.95f, .77f, .48f, shimmer * .55f); shapes.circle(particle.position.x - particle.size * .32f, particle.position.y + particle.size * .1f, particle.size * .24f);
-        }
-        if (particle.bodyType == 4 && particle.size > 5f) {
-            shapes.setColor(.76f, .56f, .37f, shimmer * .38f);
-            shapes.rectLine(particle.position.x - particle.size * 1.3f, particle.position.y, particle.position.x + particle.size * 1.3f, particle.position.y, Math.max(1f, particle.size * .16f));
+            shapes.setColor(.92f, .97f, 1f, shimmer * .82f);
+            shapes.circle(x - size * .31f, y + size * .29f, Math.max(.55f, size * .22f), 10);
+        } else if (particle.bodyType == 0 && size > 4f) {
+            shapes.setColor(.12f, .09f, .07f, shimmer * .45f);
+            shapes.circle(x + size * .28f, y + size * .09f, size * .13f, 8);
         }
     }
 
@@ -557,26 +647,26 @@ public final class RpsArena extends ApplicationAdapter {
         float sliderY = Gdx.graphics.getHeight() - 405f;
         float countRow = Gdx.graphics.getHeight() - 332f;
         shapes.begin(ShapeRenderer.ShapeType.Filled);
-        shapes.setColor(.06f, .025f, .14f, .95f); shapes.rect(panelX, 86, width, Gdx.graphics.getHeight() - 172);
-        shapes.setColor(.61f, .24f, .95f, .82f); shapes.rect(panelX, Gdx.graphics.getHeight() - 132, width, 2);
-        shapes.setColor(.15f, .07f, .29f, 1f); shapes.rect(panelX + 22, Gdx.graphics.getHeight() - 355, width - 44, 168);
-        if (editingBlackHoleCount) { shapes.setColor(.29f, .12f, .48f, 1f); shapes.rect(panelX + 92, countRow - 27, 55, 34); }
-        shapes.setColor(.16f, .11f, .35f, 1f); shapes.rect(panelX+23, sliderY, width-46, 9);
-        shapes.setColor(.74f, .35f, 1f, 1f); shapes.rect(panelX+23, sliderY, (width-46) * ((speed-.35f)/2.15f), 9);
+        shapes.setColor(.018f, .029f, .047f, .97f); shapes.rect(panelX, 86, width, Gdx.graphics.getHeight() - 172);
+        shapes.setColor(.72f, .43f, .16f, .88f); shapes.rect(panelX, Gdx.graphics.getHeight() - 132, width, 2);
+        shapes.setColor(.035f, .055f, .078f, 1f); shapes.rect(panelX + 22, Gdx.graphics.getHeight() - 355, width - 44, 168);
+        if (editingBlackHoleCount) { shapes.setColor(.11f, .19f, .27f, 1f); shapes.rect(panelX + 92, countRow - 27, 55, 34); }
+        shapes.setColor(.08f, .13f, .19f, 1f); shapes.rect(panelX+23, sliderY, width-46, 9);
+        shapes.setColor(.43f, .72f, .91f, 1f); shapes.rect(panelX+23, sliderY, (width-46) * ((speed-.35f)/2.15f), 9);
         shapes.circle(panelX+23+(width-46)*((speed-.35f)/2.15f), sliderY+4.5f, 13);
         shapes.end();
         batch.begin();
-        font.setColor(.88f, .72f, 1f, 1f); font.getData().setScale(1.92f); text("BLACK HOLE", panelX + 22, Gdx.graphics.getHeight() - 84);
-        font.setColor(.62f, .48f, .86f, 1f); font.getData().setScale(1.0f); text("RAINBOW PARTICLE ACCRETION", panelX + 23, Gdx.graphics.getHeight() - 115);
+        font.setColor(1f, .82f, .57f, 1f); font.getData().setScale(1.92f); text("BLACK HOLE", panelX + 22, Gdx.graphics.getHeight() - 84);
+        font.setColor(.52f, .69f, .80f, 1f); font.getData().setScale(1.0f); text("CONTINUOUS STELLAR ACCRETION", panelX + 23, Gdx.graphics.getHeight() - 115);
         font.setColor(Color.WHITE); font.getData().setScale(1.16f); text("LIVE PARTICLES", panelX + 42, Gdx.graphics.getHeight() - 220);
-        font.setColor(.94f, .78f, 1f, 1f); font.getData().setScale(2.2f); text(String.valueOf(cosmicParticles.size), panelX + 42, Gdx.graphics.getHeight() - 258);
-        font.setColor(.56f, .42f, .76f, 1f); font.getData().setScale(.94f); text("ABSORBED  " + absorbedParticles, panelX + 150, Gdx.graphics.getHeight() - 237);
-        font.setColor(.56f, .42f, .76f, 1f); font.getData().setScale(.82f); text("MASS  " + (int)blackHoleMass, panelX + 150, Gdx.graphics.getHeight() - 258);
-        font.setColor(.7f, .62f, .92f, 1f); font.getData().setScale(.94f); text("PARTICLE SEED", panelX + 42, Gdx.graphics.getHeight() - 298);
+        font.setColor(.95f, .79f, .53f, 1f); font.getData().setScale(2.2f); text(String.valueOf(cosmicParticles.size), panelX + 42, Gdx.graphics.getHeight() - 258);
+        font.setColor(.44f, .62f, .73f, 1f); font.getData().setScale(.94f); text("ABSORBED  " + absorbedParticles, panelX + 150, Gdx.graphics.getHeight() - 237);
+        font.setColor(.44f, .62f, .73f, 1f); font.getData().setScale(.82f); text("MASS  " + (int)blackHoleMass, panelX + 150, Gdx.graphics.getHeight() - 258);
+        font.setColor(.55f, .71f, .81f, 1f); font.getData().setScale(.94f); text("PARTICLE SEED", panelX + 42, Gdx.graphics.getHeight() - 298);
         font.setColor(Color.WHITE); font.getData().setScale(1.1f); text("-", panelX + 62, countRow);
         text(editingBlackHoleCount ? (blackHoleCountValue.isEmpty() ? "|" : blackHoleCountValue + "|") : String.valueOf(blackHoleStartCount), panelX + 101, countRow);
         text("+", panelX + 164, countRow);
-        font.setColor(.7f, .62f, .92f, 1f); font.getData().setScale(1.03f); text("TIME SCALE  " + String.format("%.1fx", speed), panelX + 22, sliderY + 35);
+        font.setColor(.55f, .71f, .81f, 1f); font.getData().setScale(1.03f); text("TIME SCALE  " + String.format("%.1fx", speed), panelX + 22, sliderY + 35);
         font.setColor(Color.WHITE); font.getData().setScale(1.08f); text(paused ? "▶  RESUME" : "Ⅱ  PAUSE", panelX+24, sliderY-38); text("↻  NEW CLOUD", panelX+153, sliderY-38);
         font.setColor(.56f, .78f, 1f, 1f); font.getData().setScale(1.02f); text("SIMULATION MENU", panelX + 24, 157);
         font.setColor(.48f, .59f, .84f, 1f); font.getData().setScale(.86f); text("SPIRAL IN. CROSS THE EVENT HORIZON.", panelX + 24, 114);
@@ -699,30 +789,47 @@ public final class RpsArena extends ApplicationAdapter {
         sound.play(.42f, .91f + random.nextFloat() * .16f, 0f);
     }
 
-    /** A soft, mostly black event horizon with a narrow warped accretion ring. */
+    /** A high-resolution, turbulent disk with Doppler brightening and a truly dark horizon. */
     private Texture createBlackHoleSprite() {
-        final int size = 256;
+        final int size = 384;
+        final float center = size * .5f;
         Pixmap map = transparentPixmap(size, size);
         for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) {
-            float dx = x - size * .5f, dy = y - size * .5f;
+            float dx = x - center, dy = y - center;
             float radius = (float)Math.sqrt(dx * dx + dy * dy);
-            if (radius > 124f) continue;
-            float diskRadius = (float)Math.sqrt(dx * dx + (dy * 2.05f) * (dy * 2.05f));
-            float ring = (float)Math.exp(-Math.pow((diskRadius - 73f) / 10f, 2));
-            float outerGlow = (float)Math.exp(-Math.pow((radius - 93f) / 32f, 2));
-            float angleLight = .36f + .64f * Math.max(0f, -dx / Math.max(radius, 1f));
-            if (radius < 49f) {
-                map.setColor(.001f, .001f, .004f, 1f);
+            if (radius > 187f) continue;
+            float flattenedY = dy * 2.62f;
+            float diskRadius = (float)Math.sqrt(dx * dx + flattenedY * flattenedY);
+            float azimuth = MathUtils.atan2(flattenedY, dx);
+            float innerDisk = gaussian(diskRadius, 91f, 7.5f);
+            float hotEdge = gaussian(diskRadius, 105f, 13f);
+            float outerDisk = gaussian(diskRadius, 132f, 28f) * .46f;
+            float turbulence = .72f + .15f * MathUtils.sin(azimuth * 19f + diskRadius * .39f)
+                    + .10f * MathUtils.sin(azimuth * 31f - diskRadius * .16f);
+            float disk = Math.max(0f, (innerDisk + hotEdge + outerDisk) * turbulence);
+            float heat = MathUtils.clamp(1.32f - diskRadius / 155f, .08f, 1f);
+            float approaching = MathUtils.clamp(.48f - dx / 235f, .18f, 1f);
+            float lensing = gaussian(radius, 76f, 4.5f) * (.48f + Math.max(0f, -dy / 95f) * .42f);
+            float dustGlow = gaussian(radius, 133f, 47f) * .055f;
+            if (radius < 72f) {
+                float edge = MathUtils.clamp((72f - radius) / 3f, 0f, 1f);
+                map.setColor(.0002f, .00025f, .0005f, .94f + edge * .06f);
             } else {
-                float red = .006f + ring * (.40f + .53f * angleLight) + outerGlow * .028f;
-                float green = .003f + ring * (.08f + .55f * angleLight);
-                float blue = .018f + ring * (.04f + .49f * angleLight) + outerGlow * .12f;
-                float alpha = MathUtils.clamp(ring * .96f + outerGlow * .26f, 0f, .98f);
-                map.setColor(red, green, blue, alpha);
+                float energy = disk * (.48f + approaching * .75f);
+                float red = energy * (.74f + heat * .33f) + lensing * .78f + dustGlow * .16f;
+                float green = energy * (.14f + heat * .72f) + lensing * .48f + dustGlow * .12f;
+                float blue = energy * (.018f + heat * heat * .69f) + lensing * .20f + dustGlow * .20f;
+                float alpha = MathUtils.clamp(disk * .88f + lensing * .72f + dustGlow, 0f, .99f);
+                map.setColor(Math.min(1f, red), Math.min(1f, green), Math.min(1f, blue), alpha);
             }
             map.drawPixel(x, y);
         }
         return texture(map);
+    }
+
+    private float gaussian(float value, float center, float width) {
+        float normalized = (value - center) / width;
+        return (float)Math.exp(-normalized * normalized);
     }
 
     private int count(Kind kind) { int total = 0; for (Piece p : pieces) if (p.kind == kind) total++; return total; }
