@@ -134,11 +134,12 @@ Use `images/blackhole.png` as the visual direction:
 
 ## Current source layout
 
-- `src/main/java/mspacman/DesktopLauncher.java` — LibGDX desktop entry point.
-- `src/main/java/mspacman/RpsArena.java` — application shell, rendering lifecycle, UI wiring, and shared assets. This remains the main integration point and should be further thinned as simulations grow.
-- `src/main/java/mspacman/RpsSimulation.java` — RPS rules module.
-- `src/main/java/mspacman/BlackHoleSimulation.java` — black-hole mass, gravity parameter, and horizon equations.
-- `src/main/java/mspacman/SimulationMenu.java` — menu rendering and selection.
+- `src/main/java/zoesim/DesktopLauncher.java` — desktop entry point and optional headless smoke-check mode.
+- `src/main/java/zoesim/SimArena.java` — thin application shell for lifecycle, layout, menu selection, and simulation dispatch.
+- `src/main/java/zoesim/ArenaSimulation.java` — lifecycle contract implemented by each simulation.
+- `src/main/java/zoesim/RpsSimulation.java` — complete RPS rules, state, input, rendering, and assets.
+- `src/main/java/zoesim/BlackHoleSimulation.java` — complete black-hole physics, state, input, rendering, and assets.
+- `src/main/java/zoesim/SimulationMenu.java` — menu rendering and selection.
 - `src/main/resources/sounds/` — CC0 audio assets and licenses.
 - `images/a.jpg`, `images/b.jpg` — original RPS reference photos.
 - `images/blackhole.png` — black-hole/accretion-disk visual reference.

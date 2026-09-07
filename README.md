@@ -1,11 +1,23 @@
-# RPS Arena
+# Simulation Lab
 
-A real-time desktop Rock / Paper / Scissors battle simulator built with Java and LibGDX. Each winning piece consumes its opponent and splits into two, so the counters always show the live population inside the arena.
+A Java and LibGDX desktop simulation lab containing a Rock / Paper / Scissors battle arena and an animated black-hole accretion simulation.
 
-Run it with Maven:
+Run the desktop application with Maven:
 
 ```powershell
 mvn exec:java
+```
+
+Run the JUnit suite without opening a window:
+
+```powershell
+mvn test
+```
+
+Run the lightweight model smoke checks explicitly in headless mode:
+
+```powershell
+mvn exec:java '-Dexec.args=--headless'
 ```
 
 Build a distributable jar:
@@ -15,4 +27,4 @@ mvn package
 java -jar target/rps-arena.jar
 ```
 
-Controls are in the right-hand panel: adjust the three starting populations, drag the motion-speed slider, pause, or reset. The generated sprites animate in place (including a three-frame scissor cut), and collisions use CC0 Kenney Interface Sounds; its license is included beside the WAV files.
+Controls are in the right-hand panel. The generated visuals animate in place, and the simulations use CC0 Kenney sounds with license files included beside the audio assets.
