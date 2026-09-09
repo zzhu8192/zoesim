@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -23,7 +24,7 @@ public final class RpsSimulation implements ArenaSimulation {
     static final int MAX_PIECES = 360;
     private static final float PIECE_RADIUS = 17f;
 
-    private enum Kind {
+    enum Kind {
         ROCK("ROCK", new Color(.05f, .82f, 1f, 1f)),
         PAPER("PAPER", new Color(1f, .70f, .23f, 1f)),
         SCISSORS("SCISSORS", new Color(.95f, .44f, 1f, 1f));
@@ -70,13 +71,45 @@ public final class RpsSimulation implements ArenaSimulation {
         }
     }
 
+    static final class VictoryConfetti {
+        float x, y;
+        float vx, vy;
+        final float width, height;
+        float rotation, rotSpeed;
+        float flutterPhase;
+        final float flutterSpeed;
+        final Color color;
+        float age;
+        final float maxAge;
+
+        VictoryConfetti(float x, float y, float vx, float vy, float width, float height,
+                        float rotation, float rotSpeed, float flutterPhase, float flutterSpeed,
+                        Color color, float maxAge) {
+            this.x = x;
+            this.y = y;
+            this.vx = vx;
+            this.vy = vy;
+            this.width = width;
+            this.height = height;
+            this.rotation = rotation;
+            this.rotSpeed = rotSpeed;
+            this.flutterPhase = flutterPhase;
+            this.flutterSpeed = flutterSpeed;
+            this.color = color;
+            this.age = 0f;
+            this.maxAge = maxAge;
+        }
+    }
+
     private final Random random = new Random();
     private final Array<Piece> pieces = new Array<>();
     private final Array<Impact> impacts = new Array<>();
+    private final Array<VictoryConfetti> confetti = new Array<>();
     private final EnumMap<Kind, Integer> start = new EnumMap<>(Kind.class);
     private final Sound rockKnock;
     private final Sound paperWrap;
     private final Sound scissorsSnip;
+    private final Sound victorySound;
     private final Texture rockSprite;
     private final Texture paperSprite;
     private final Texture[] scissorsSprites;
@@ -87,12 +120,22 @@ public final class RpsSimulation implements ArenaSimulation {
     private float heldStartTime, heldStartRepeat;
     private String editingValue = "";
     private final GlyphLayout glyphLayout = new GlyphLayout();
+    private Kind winnerKind;
+    private float victoryTimer;
+    private boolean battleActive;
 
     public RpsSimulation() {
         for (Kind kind : Kind.values()) start.put(kind, 22);
         rockKnock = Gdx.audio.newSound(Gdx.files.internal("sounds/rock-knock.wav"));
         paperWrap = Gdx.audio.newSound(Gdx.files.internal("sounds/paper-wrap.wav"));
         scissorsSnip = Gdx.audio.newSound(Gdx.files.internal("sounds/scissors-snip.wav"));
+        Sound vs = null;
+        try {
+            if (Gdx.audio != null && Gdx.files != null) {
+                vs = Gdx.audio.newSound(Gdx.files.internal("sounds/victory.wav"));
+            }
+        } catch (Exception ignored) { }
+        victorySound = vs;
         rockSprite = createRockSprite();
         paperSprite = createPaperSprite();
         scissorsSprites = new Texture[] { createScissorsSprite(18), createScissorsSprite(32), createScissorsSprite(46) };
@@ -157,6 +200,52 @@ public final class RpsSimulation implements ArenaSimulation {
             impact.age += dt;
             if (impact.age > .86f) it.remove();
         }
+
+        if (battleActive && winnerKind == null) {
+            Kind survivor = null;
+            int distinct = 0;
+            for (int i = 0; i < pieces.size; i++) {
+                Kind k = pieces.get(i).kind;
+                if (survivor == null) {
+                    survivor = k;
+                    distinct = 1;
+                } else if (survivor != k) {
+                    distinct = 2;
+                    break;
+                }
+            }
+            if (distinct == 1 && survivor != null) {
+                winnerKind = survivor;
+                battleActive = false;
+                victoryTimer = 0f;
+                spawnVictoryBurst(winnerKind);
+                playVictory();
+            }
+        }
+
+        if (winnerKind != null) {
+            victoryTimer += dt;
+            if (victoryTimer > 0.4f && confetti.size < 180) {
+                if (random.nextFloat() < dt * 10f) {
+                    spawnTrickleConfetti(winnerKind);
+                }
+            }
+        }
+
+        for (Iterator<VictoryConfetti> it = confetti.iterator(); it.hasNext();) {
+            VictoryConfetti c = it.next();
+            c.age += dt;
+            if (c.age >= c.maxAge) {
+                it.remove();
+                continue;
+            }
+            c.vy -= 140f * dt;
+            c.vx *= (float)Math.pow(0.96, dt * 60f);
+            c.x += c.vx * dt;
+            c.y += c.vy * dt;
+            c.rotation += c.rotSpeed * dt;
+            c.flutterPhase += c.flutterSpeed * dt;
+        }
     }
 
     private void consume(int hunterIndex, int preyIndex) {
@@ -179,8 +268,19 @@ public final class RpsSimulation implements ArenaSimulation {
     }
 
     private void reset() {
-        pieces.clear(); impacts.clear(); collisions = 0;
-        for (Kind kind : Kind.values()) for (int i = 0; i < start.get(kind); i++) spawnRandom(kind);
+        pieces.clear();
+        impacts.clear();
+        confetti.clear();
+        collisions = 0;
+        winnerKind = null;
+        victoryTimer = 0f;
+        int activeKinds = 0;
+        for (Kind kind : Kind.values()) {
+            int count = start.get(kind);
+            if (count > 0) activeKinds++;
+            for (int i = 0; i < count; i++) spawnRandom(kind);
+        }
+        battleActive = (activeKinds >= 2);
     }
 
     private void spawnRandom(Kind kind) {
@@ -201,6 +301,8 @@ public final class RpsSimulation implements ArenaSimulation {
         this.elapsed = elapsed;
         drawBackground(shapes);
         drawArena(shapes, batch);
+        drawConfetti(shapes);
+        drawVictoryBanner(shapes, batch, font);
         drawInterface(shapes, batch, font);
     }
 
@@ -473,6 +575,187 @@ public final class RpsSimulation implements ArenaSimulation {
         sound.play(.42f, .91f + random.nextFloat() * .16f, 0f);
     }
 
+    private void playVictory() {
+        if (victorySound != null) {
+            victorySound.play(0.85f);
+        }
+    }
+
+    private void spawnVictoryBurst(Kind winner) {
+        confetti.clear();
+        Color[] celebrationPalette = new Color[] {
+            winner.bright,
+            Color.WHITE,
+            new Color(1f, 0.85f, 0.18f, 1f),
+            new Color(0.20f, 0.95f, 1f, 1f),
+            new Color(1f, 0.35f, 0.78f, 1f),
+            new Color(0.40f, 1f, 0.45f, 1f)
+        };
+
+        for (int i = 0; i < 140; i++) {
+            float angle = random.nextFloat() * MathUtils.PI2;
+            float speedMag = 90f + random.nextFloat() * 320f;
+            float vx = MathUtils.cos(angle) * speedMag;
+            float vy = MathUtils.sin(angle) * speedMag * 0.75f + (80f + random.nextFloat() * 160f);
+
+            float w = 6f + random.nextFloat() * 7f;
+            float h = 10f + random.nextFloat() * 12f;
+            float rot = random.nextFloat() * 360f;
+            float rotSpd = (random.nextFloat() - 0.5f) * 420f;
+            float flutterPh = random.nextFloat() * MathUtils.PI2;
+            float flutterSpd = 5f + random.nextFloat() * 9f;
+            Color col = celebrationPalette[random.nextInt(celebrationPalette.length)];
+            float maxAge = 2.5f + random.nextFloat() * 2.2f;
+
+            confetti.add(new VictoryConfetti(
+                arenaX + (random.nextFloat() - 0.5f) * 100f,
+                arenaY + (random.nextFloat() - 0.5f) * 40f,
+                vx, vy, w, h, rot, rotSpd, flutterPh, flutterSpd, col, maxAge
+            ));
+        }
+    }
+
+    private void spawnTrickleConfetti(Kind winner) {
+        Color[] celebrationPalette = new Color[] {
+            winner.bright,
+            Color.WHITE,
+            new Color(1f, 0.85f, 0.18f, 1f),
+            new Color(0.20f, 0.95f, 1f, 1f),
+            new Color(1f, 0.35f, 0.78f, 1f)
+        };
+        float x = arenaX + (random.nextFloat() - 0.5f) * arenaRadius * 1.5f;
+        float y = arenaY + arenaRadius * 0.85f + random.nextFloat() * 30f;
+        float vx = (random.nextFloat() - 0.5f) * 70f;
+        float vy = -(45f + random.nextFloat() * 65f);
+        float w = 6f + random.nextFloat() * 6f;
+        float h = 9f + random.nextFloat() * 10f;
+        float rot = random.nextFloat() * 360f;
+        float rotSpd = (random.nextFloat() - 0.5f) * 280f;
+        float flutterPh = random.nextFloat() * MathUtils.PI2;
+        float flutterSpd = 4f + random.nextFloat() * 7f;
+        Color col = celebrationPalette[random.nextInt(celebrationPalette.length)];
+        float maxAge = 3.0f + random.nextFloat() * 2.0f;
+
+        confetti.add(new VictoryConfetti(x, y, vx, vy, w, h, rot, rotSpd, flutterPh, flutterSpd, col, maxAge));
+    }
+
+    private void drawConfetti(ShapeRenderer shapes) {
+        if (confetti.size == 0) return;
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        shapes.begin(ShapeRenderer.ShapeType.Filled);
+        for (VictoryConfetti c : confetti) {
+            float fadeProgress = c.age / c.maxAge;
+            float alpha = (fadeProgress < 0.12f)
+                    ? (fadeProgress / 0.12f)
+                    : (1f - (fadeProgress - 0.12f) / 0.88f);
+            alpha = MathUtils.clamp(alpha, 0f, 1f);
+
+            float flutter = MathUtils.sin(c.flutterPhase);
+            shapes.setColor(c.color.r, c.color.g, c.color.b, alpha * 0.92f);
+            shapes.rect(c.x, c.y, c.width * 0.5f, c.height * 0.5f,
+                    c.width, c.height, 1f, flutter, c.rotation);
+        }
+        shapes.end();
+    }
+
+    private void drawVictoryBanner(ShapeRenderer shapes, SpriteBatch batch, BitmapFont font) {
+        if (winnerKind == null) return;
+
+        float t = Math.min(1f, victoryTimer / 0.48f);
+        float p = t - 1f;
+        float scale = (t < 1f) ? (1f + p * p * (2.6f * p + 1.6f)) : 1f;
+        scale = Math.max(0.01f, scale);
+
+        float bannerW = Math.min(480f, arenaRadius * 1.68f) * scale;
+        float bannerH = 124f * scale;
+        float bannerX = arenaX - bannerW * 0.5f;
+        float bannerY = arenaY - bannerH * 0.5f;
+
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+
+        // 1. Ambient pulsing aura behind the banner
+        float pulse = 0.5f + 0.5f * MathUtils.sin(victoryTimer * 4.2f);
+        shapes.begin(ShapeRenderer.ShapeType.Filled);
+        shapes.setColor(winnerKind.bright.r, winnerKind.bright.g, winnerKind.bright.b, (0.12f + 0.09f * pulse) * Math.min(1f, scale));
+        shapes.rect(bannerX - 16f * scale, bannerY - 14f * scale, bannerW + 32f * scale, bannerH + 28f * scale);
+
+        // 2. Glassmorphic plaque backdrop
+        shapes.setColor(.018f, .045f, .10f, 0.93f);
+        shapes.rect(bannerX, bannerY, bannerW, bannerH);
+
+        // 3. Top / Bottom champion neon accent bars
+        shapes.setColor(winnerKind.bright.r, winnerKind.bright.g, winnerKind.bright.b, 0.90f);
+        shapes.rect(bannerX, bannerY + bannerH - 4f * scale, bannerW, 4f * scale);
+        shapes.setColor(winnerKind.bright.r, winnerKind.bright.g, winnerKind.bright.b, 0.42f);
+        shapes.rect(bannerX, bannerY, bannerW, 2.5f * scale);
+        shapes.end();
+
+        // 4. Subtle crisp border
+        shapes.begin(ShapeRenderer.ShapeType.Line);
+        shapes.setColor(winnerKind.bright.r, winnerKind.bright.g, winnerKind.bright.b, 0.60f);
+        shapes.rect(bannerX, bannerY, bannerW, bannerH);
+        shapes.setColor(1f, 1f, 1f, 0.15f);
+        shapes.rect(bannerX + 1.5f, bannerY + 1.5f, bannerW - 3f, bannerH - 3f);
+        shapes.end();
+
+        // 5. Draw icons and typography
+        batch.begin();
+        Texture winnerSprite = (winnerKind == Kind.ROCK) ? rockSprite :
+                (winnerKind == Kind.PAPER) ? paperSprite :
+                scissorsSprites[(int)(victoryTimer * 7f) % scissorsSprites.length];
+
+        float iconSize = 48f * scale;
+        float bobbing = MathUtils.sin(victoryTimer * 5.0f) * 4.5f * scale;
+        float iconY = bannerY + bannerH * 0.5f - iconSize * 0.5f + bobbing;
+
+        // Left winner mascot
+        float leftIconX = bannerX + 24f * scale;
+        batch.draw(winnerSprite, leftIconX, iconY, iconSize, iconSize);
+
+        // Right winner mascot
+        float rightIconX = bannerX + bannerW - 24f * scale - iconSize;
+        batch.draw(winnerSprite, rightIconX, iconY, iconSize, iconSize);
+
+        // Header Title
+        String title = winnerKind.label + " WINS!";
+        font.setColor(winnerKind.bright);
+        font.getData().setScale(1.32f * scale);
+        centeredText(font, batch, title, arenaX, bannerY + bannerH - 22f * scale);
+
+        // Subtitle / Battle stats
+        int survivors = count(winnerKind);
+        String sub = survivors + " SURVIVORS   •   " + collisions + " CLASHES";
+        font.setColor(.88f, .94f, 1f, 0.95f);
+        font.getData().setScale(0.70f * scale);
+        centeredText(font, batch, sub, arenaX, bannerY + bannerH * 0.48f);
+
+        // Status / prompt
+        String prompt = "SIMULATION RUNNING   •   PRESS RESET TO PLAY AGAIN";
+        font.setColor(.45f, .70f, .90f, 0.82f);
+        font.getData().setScale(0.52f * scale);
+        centeredText(font, batch, prompt, arenaX, bannerY + 22f * scale);
+
+        font.getData().setScale(1f);
+        font.setColor(Color.WHITE);
+        batch.end();
+    }
+
+    Kind getWinnerKind() { return winnerKind; }
+    boolean isBattleActive() { return battleActive; }
+    int getConfettiCount() { return confetti.size; }
+    float getVictoryTimer() { return victoryTimer; }
+
+    static Kind determineWinner(int rocks, int papers, int scissors) {
+        int nonZero = 0;
+        Kind candidate = null;
+        if (rocks > 0) { nonZero++; candidate = Kind.ROCK; }
+        if (papers > 0) { nonZero++; candidate = Kind.PAPER; }
+        if (scissors > 0) { nonZero++; candidate = Kind.SCISSORS; }
+        return (nonZero == 1) ? candidate : null;
+    }
+
     private int count(Kind kind) { int total = 0; for (Piece piece : pieces) if (piece.kind == kind) total++; return total; }
     private static void text(BitmapFont font, SpriteBatch batch, String value, float x, float y) {
         Color cur = font.getColor();
@@ -553,6 +836,7 @@ public final class RpsSimulation implements ArenaSimulation {
     @Override public void leave() { draggingSpeed = false; heldStartKind = null; editingKind = null; editingValue = ""; paused = false; }
     @Override public void dispose() {
         rockKnock.dispose(); paperWrap.dispose(); scissorsSnip.dispose();
+        if (victorySound != null) victorySound.dispose();
         rockSprite.dispose(); paperSprite.dispose(); for (Texture texture : scissorsSprites) texture.dispose();
     }
 }
