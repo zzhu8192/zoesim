@@ -1,4 +1,4 @@
-# Java / Maven build products
+# Java & Maven build products
 target/
 *.class
 *.jar
@@ -9,6 +9,8 @@ target/
 # IDEs and editor state
 .idea/
 *.iml
+*.ipr
+*.iws
 .project
 .classpath
 .settings/
@@ -24,3 +26,6 @@ tmp/
 out/
 *.tmp
 *.bak
+*.swp
+*.swo
+*~
