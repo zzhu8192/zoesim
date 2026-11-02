@@ -6,9 +6,9 @@ Desktop Java 17 / LibGDX application built with Maven. The application starts at
 
 Build and run:
 
-```powershell
-& 'D:\lang\maven399\bin\mvn.cmd' package
-& 'D:\lang\maven399\bin\mvn.cmd' exec:java
+```bash
+mvn package
+mvn exec:java
 ```
 
 The runnable shaded jar is `target/rps-arena.jar`.
